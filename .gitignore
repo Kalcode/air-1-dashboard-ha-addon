@@ -1,0 +1,45 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Build outputs
+dashboard/dist/
+dashboard/.astro/
+*.log
+
+# Development
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+.cache/
+.temp/
+
+# OS
+Thumbs.db
+ehthumbs.db
+
+# Bun
+bun.lock
+.wrangler/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Local development
+tasks/
+*.output

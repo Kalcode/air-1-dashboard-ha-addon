@@ -1,0 +1,29 @@
+name: "Air-1 Quality Dashboard"
+version: "1.0.0"
+slug: air1_dashboard
+description: "Air quality visualization dashboard for Apollo AIR-1 ESPHome sensors with automatic data integration"
+url: "https://github.com/yourusername/air1-dashboard-ha-addon"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+init: false
+startup: application
+boot: auto
+hassio_api: true
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+ingress_entry: "/"
+panel_icon: mdi:air-filter
+panel_title: "Air Quality"
+options:
+  sensor_prefix: "air1"
+  update_interval: 60
+  history_days: 30
+schema:
+  sensor_prefix: str
+  update_interval: int(10,3600)
+  history_days: int(1,365)

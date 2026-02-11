@@ -1,0 +1,5 @@
+{
+  "sensor_prefix": "air1",
+  "update_interval": 60,
+  "history_days": 30
+}

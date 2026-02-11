@@ -1,0 +1,26 @@
+{
+  "name": "air1-dashboard-server",
+  "version": "1.0.0",
+  "description": "Express server for Air-1 Dashboard Home Assistant addon",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "homeassistant",
+    "air-quality",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "compression": "^1.7.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
