@@ -59,9 +59,9 @@ async function runTests() {
 
     if (sensors.length > 0) {
       // Show first 5 sensors
-      sensors.slice(0, 5).forEach((sensor) => {
+      for (const sensor of sensors.slice(0, 5)) {
         console.log(`  - ${sensor.entity_id}: ${sensor.state} ${sensor.attributes?.unit_of_measurement || ''}`);
-      });
+      }
 
       if (sensors.length > 5) {
         console.log(`  ... and ${sensors.length - 5} more`);

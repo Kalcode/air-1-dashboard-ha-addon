@@ -50,6 +50,19 @@
           }
         }
       }
+    },
+    {
+      "include": ["**/dashboard/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useJsxKeyInIterable": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
     }
   ],
   "files": {

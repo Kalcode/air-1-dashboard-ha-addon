@@ -6,6 +6,22 @@ interface HADataSourceProps {
   onError: (error: string) => void;
 }
 
+interface DeviceResponse {
+  entity_id?: string;
+  device_id?: string;
+  friendly_name?: string;
+  device_name?: string;
+  room?: string;
+  co2?: number;
+  pm25?: number;
+  temperature?: number;
+  humidity?: number;
+  voc?: number;
+  nox?: number;
+  rssi?: number;
+  uptime?: number;
+}
+
 export default function HADataSource(props: HADataSourceProps) {
   const [sensors, setSensors] = createSignal<SensorOption[]>([]);
   const [selectedSensor, setSelectedSensor] = createSignal<string | null>(null);
@@ -63,9 +79,9 @@ export default function HADataSource(props: HADataSourceProps) {
       }
       const data = await response.json();
       if (data.devices && Array.isArray(data.devices)) {
-        const sensorList: SensorOption[] = data.devices.map((device: any) => ({
-          entity_id: device.entity_id || device.device_id,
-          friendly_name: device.friendly_name || device.device_name,
+        const sensorList: SensorOption[] = data.devices.map((device: DeviceResponse) => ({
+          entity_id: device.entity_id || device.device_id || '',
+          friendly_name: device.friendly_name || device.device_name || '',
           room: device.room,
           device_name: device.device_name,
         }));
@@ -107,7 +123,7 @@ export default function HADataSource(props: HADataSourceProps) {
       const data = await response.json();
 
       // Find the selected device in the response
-      const device = data.devices?.find((d: any) => d.entity_id === entityId);
+      const device = data.devices?.find((d: DeviceResponse) => d.entity_id === entityId);
 
       if (!device) {
         throw new Error(`Device ${entityId} not found in response`);

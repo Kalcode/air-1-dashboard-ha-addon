@@ -189,9 +189,9 @@ app.listen(PORT, () => {
   console.log(`  📂 Serving files from: ${distPath}`);
   console.log('  🎭 Mode: MOCK DATA (fake sensors)\n');
   console.log('  Available mock sensors:');
-  Object.values(MOCK_SENSORS).forEach((sensor) => {
+  for (const sensor of Object.values(MOCK_SENSORS)) {
     console.log(`    • ${sensor.friendly_name} (${sensor.entity_id})`);
-  });
+  }
   console.log('\n  📊 API Endpoints:');
   console.log(`    • GET  http://localhost:${PORT}/api/config`);
   console.log(`    • GET  http://localhost:${PORT}/api/sensors`);

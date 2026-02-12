@@ -16,10 +16,6 @@ pre-commit:
       run: bunx @biomejs/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
       stage_fixed: true
 
-    typecheck:
-      glob: "*.{ts,tsx}"
-      run: bun run typecheck
-
 # Validate versions and run checks before pushing
 pre-push:
   commands:
