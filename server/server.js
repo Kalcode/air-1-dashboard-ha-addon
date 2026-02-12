@@ -31,8 +31,8 @@ const STATIC_PATH = process.env.STATIC_PATH || '/app/dashboard/dist';
 
 // Default configuration
 const DEFAULT_CONFIG = {
-  sensor_prefix: 'air1',
-  update_interval: 60,
+  sensor_prefix: 'apollo_air_1',
+  update_interval: 10,
   history_days: 30
 };
 
@@ -80,14 +80,18 @@ function createApp() {
     next();
   });
 
-  // Handle ingress path prefix
-  // Home Assistant ingress adds a path prefix that we need to strip
+  // Normalize paths - remove leading double slashes from ingress
   app.use((req, res, next) => {
-    // Check for ingress prefix pattern: /api/hassio_ingress/...
-    const ingressMatch = req.path.match(/^\/api\/hassio_ingress\/[^\/]+(\/.*)$/);
-    if (ingressMatch) {
-      req.url = ingressMatch[1];
+    if (req.path.startsWith('//')) {
+      req.url = req.url.replace(/^\/+/, '/');
     }
+    next();
+  });
+
+  // Log all incoming requests for debugging
+  app.use((req, res, next) => {
+    const ingressPath = req.headers['x-ingress-path'];
+    console.log(`[Server] ${req.method} ${req.path} | Ingress: ${ingressPath || 'NOT SET'}`);
     next();
   });
 
@@ -132,8 +136,6 @@ function createApp() {
    */
   app.get('/api/sensors', async (req, res) => {
     try {
-      const { group_by_device } = req.query;
-
       console.log(`[Server] Fetching sensors with prefix: ${appConfig.sensor_prefix}`);
 
       const entities = await fetchSensors(appConfig.sensor_prefix);
@@ -141,37 +143,57 @@ function createApp() {
       if (entities.length === 0) {
         return res.json({
           success: true,
-          data: [],
+          devices: [],
           message: `No sensors found with prefix "${appConfig.sensor_prefix}"`
         });
       }
 
-      // Transform entities to sensor data format
-      const sensorData = transformEntityToSensorData(entities, appConfig.sensor_prefix);
+      // Group entities by device
+      const grouped = groupEntitiesByDevice(entities, appConfig.sensor_prefix);
 
-      // Group by device if requested
-      if (group_by_device === 'true') {
-        const grouped = groupEntitiesByDevice(entities, appConfig.sensor_prefix);
-        const groupedSensorData = {};
+      // Transform each device's entities into a device object
+      const devices = Object.entries(grouped).map(([deviceId, deviceEntities]) => {
+        console.log(`\n[Server] Processing device: ${deviceId}`);
+        console.log(`[Server] Raw entities for ${deviceId}:`, deviceEntities.map(e => ({
+          entity_id: e.entity_id,
+          state: e.state,
+          unit: e.unit_of_measurement
+        })));
 
-        for (const [device, deviceEntities] of Object.entries(grouped)) {
-          groupedSensorData[device] = transformEntityToSensorData(
-            deviceEntities,
-            appConfig.sensor_prefix
-          );
+        // Get device metadata from first entity
+        const firstEntity = deviceEntities[0];
+        const deviceName = firstEntity.device_name || deviceId;
+
+        // Transform entities to sensor data array
+        const sensorDataArray = transformEntityToSensorData(deviceEntities, appConfig.sensor_prefix);
+        console.log(`[Server] Transformed sensor data for ${deviceId}:`, sensorDataArray);
+
+        // Combine all sensor readings into a single device object
+        const combinedSensorData = {};
+        for (const sensor of sensorDataArray) {
+          if (sensor.sensor_type && sensor.value !== null) {
+            // Map sensor_type to the property name expected by the dashboard
+            combinedSensorData[sensor.sensor_type] = sensor.value;
+          }
         }
+        console.log(`[Server] Combined sensor data for ${deviceId}:`, combinedSensorData);
 
-        return res.json({
-          success: true,
-          data: groupedSensorData,
-          count: sensorData.length
-        });
-      }
+        return {
+          entity_id: deviceId,
+          device_id: deviceId,
+          device_name: deviceName,
+          friendly_name: `Apollo AIR-1 ${deviceName}`,
+          room: null, // Could extract from entity names if needed
+          ...combinedSensorData // Merge all sensor readings (co2, pm25, temperature, etc.)
+        };
+      });
+
+      console.log(`[Server] Discovered ${devices.length} device(s) with ${entities.length} sensor entities`);
 
       res.json({
         success: true,
-        data: sensorData,
-        count: sensorData.length
+        devices: devices,
+        count: devices.length
       });
     } catch (error) {
       console.error('[Server] Error in /api/sensors:', error);
@@ -294,19 +316,24 @@ function createApp() {
   });
 
   // Serve static files from dashboard build directory
+  // HA ingress proxy handles path forwarding, so we just serve files as-is
   app.use(express.static(STATIC_PATH));
 
   // SPA fallback - serve index.html for all non-API routes
   app.get('*', (req, res) => {
+    // Normalize path to handle double slashes from ingress
+    const normalizedPath = req.path.replace(/^\/+/, '/');
+
     // Skip API routes
-    if (req.path.startsWith('/api/')) {
+    if (normalizedPath.startsWith('/api/')) {
       return res.status(404).json({
         success: false,
         error: 'API endpoint not found'
       });
     }
 
-    // Serve index.html for frontend routes
+    // Serve index.html for SPA routing
+    // HA ingress proxy handles path forwarding
     res.sendFile(join(STATIC_PATH, 'index.html'), (err) => {
       if (err) {
         console.error('[Server] Error serving index.html:', err);

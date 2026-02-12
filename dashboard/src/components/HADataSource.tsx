@@ -45,13 +45,13 @@ export default function HADataSource(props: HADataSourceProps) {
 	// Fetch config from API
 	const fetchConfig = async () => {
 		try {
-			const response = await fetch("/api/config");
+			const response = await fetch("api/config");
 			if (!response.ok) {
 				throw new Error(`Failed to fetch config: ${response.status}`);
 			}
-			const data = await response.json();
-			setConfig(data);
-			return data;
+			const json = await response.json();
+			setConfig(json.data); // Extract the 'data' property from response
+			return json.data;
 		} catch (err) {
 			console.error("Config fetch error:", err);
 			props.onError(`Failed to load configuration: ${(err as Error).message}`);
@@ -62,7 +62,7 @@ export default function HADataSource(props: HADataSourceProps) {
 	// Fetch available sensors
 	const fetchSensors = async () => {
 		try {
-			const response = await fetch("/api/sensors");
+			const response = await fetch("api/sensors");
 			if (!response.ok) {
 				throw new Error(`Failed to fetch sensors: ${response.status}`);
 			}
@@ -101,34 +101,43 @@ export default function HADataSource(props: HADataSourceProps) {
 		}
 	};
 
-	// Fetch current sensor data
-	const fetchSensorData = async (entityId: string) => {
+	// Fetch current sensor data for the selected device
+	const fetchData = async () => {
+		const entityId = selectedSensor();
+		if (!entityId) return;
+
 		try {
-			const response = await fetch(`/api/sensors/${encodeURIComponent(entityId)}`);
+			const response = await fetch("api/sensors");
 			if (!response.ok) {
 				throw new Error(`Failed to fetch sensor data: ${response.status}`);
 			}
 			const data = await response.json();
 
-			// Transform API response to SensorData format
+			// Find the selected device in the response
+			const device = data.devices?.find((d: any) => d.entity_id === entityId);
+
+			if (!device) {
+				throw new Error(`Device ${entityId} not found in response`);
+			}
+
+			// Transform device data to SensorData format
 			const sensorData: Partial<SensorData> = {
-				co2: data.co2?.toString() || "",
-				pm25: data.pm25?.toString() || "",
-				pm10: data.pm10?.toString() || "",
-				pm_1um: data.pm_1um?.toString() || "",
-				pm_4um: data.pm_4um?.toString() || "",
-				humidity: data.humidity?.toString() || "",
-				temperature: data.temperature?.toString() || "",
-				voc: data.voc?.toString() || "",
-				vocQuality: data.vocQuality || "",
-				nox: data.nox?.toString() || "",
-				pressure: data.pressure?.toString() || "",
-				rssi: data.rssi?.toString() || "",
-				uptime: data.uptime || "",
+				co2: device.co2?.toString() || "",
+				pm25: device.pm25?.toString() || "",
+				pm10: device.pm10?.toString() || "",
+				pm_1um: device.pm_1um?.toString() || "",
+				pm_4um: device.pm_4um?.toString() || "",
+				humidity: device.humidity?.toString() || "",
+				temperature: device.temperature?.toString() || "",
+				voc: device.voc?.toString() || "",
+				vocQuality: device.vocQuality || "",
+				nox: device.nox?.toString() || "",
+				pressure: device.pressure?.toString() || "",
+				rssi: device.rssi?.toString() || "",
+				uptime: device.uptime || "",
 			};
 
-			const room =
-				data.room || sensors().find((s) => s.entity_id === entityId)?.room || "Unknown";
+			const room = device.room || device.device_name || "Unknown";
 
 			props.onDataUpdate(sensorData, room);
 			setLastUpdate(new Date());
@@ -162,11 +171,11 @@ export default function HADataSource(props: HADataSourceProps) {
 		if (!entityId || !cfg) return;
 
 		// Fetch immediately
-		fetchSensorData(entityId);
+		fetchData();
 
 		// Set up polling interval
 		const interval = setInterval(() => {
-			fetchSensorData(entityId);
+			fetchData();
 		}, cfg.update_interval * 1000);
 
 		onCleanup(() => clearInterval(interval));
@@ -178,10 +187,7 @@ export default function HADataSource(props: HADataSourceProps) {
 	};
 
 	const refreshNow = async () => {
-		const entityId = selectedSensor();
-		if (entityId) {
-			await fetchSensorData(entityId);
-		}
+		await fetchData();
 	};
 
 	return (

@@ -1,15 +1,17 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import solidJs from "@astrojs/solid-js";
+import relativeLinks from "astro-relative-links";
 
 // https://astro.build/config
 export default defineConfig({
 	output: "static",
-	integrations: [solidJs()],
+	integrations: [
+		solidJs(),
+		relativeLinks() // Convert absolute paths to relative for HA ingress iframe
+	],
 	build: {
-		// Use file format for simpler paths
-		format: "file"
-	},
-	// Empty base ensures relative paths without leading slash
-	base: ""
+		format: "file",
+		assets: "_astro"
+	}
 });

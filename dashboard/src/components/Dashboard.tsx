@@ -41,6 +41,7 @@ const Dashboard: Component = () => {
 	const [viewingId, setViewingId] = createSignal<string | null>(null);
 	const [previewMode, setPreviewMode] = createSignal(false);
 	const [previewLabel, setPreviewLabel] = createSignal("");
+	const [snapshotName, setSnapshotName] = createSignal("");
 
 	// Derived signals
 	const hasData = () => data().pm25 || data().co2 || data().humidity;
@@ -94,13 +95,10 @@ const Dashboard: Component = () => {
 		const mergedData = { ...emptyData, ...data };
 		setData(mergedData);
 		setTs(new Date().toLocaleTimeString());
-		const hist = saveReading(data, room);
-		const newLatest = hist[hist.length - 1];
-		setHistory(hist);
-		setViewingId(newLatest.id);
-		if (hist.length > 1) setCompareId(hist[hist.length - 2].id);
 		setRoom(room);
+		setViewingId(null); // Clear viewing state - showing live data now
 		setStatus(`✓ Auto-updated from Home Assistant`);
+		// Don't auto-save to history - user will manually snapshot when needed
 	};
 
 	const handleError = (error: string) => {
@@ -170,6 +168,21 @@ const Dashboard: Component = () => {
 		} catch (e) {
 			setStatus(`✕ ${e instanceof Error ? e.message : "Import failed"}`);
 		}
+	};
+
+	const handleTakeSnapshot = () => {
+		if (!hasData()) {
+			setStatus("✕ No sensor data available to snapshot");
+			return;
+		}
+		const name = snapshotName().trim() || room() || "Snapshot";
+		const hist = saveReading(data(), name);
+		const newSnapshot = hist[hist.length - 1];
+		setHistory(hist);
+		setViewingId(newSnapshot.id);
+		if (hist.length > 1) setCompareId(hist[hist.length - 2].id);
+		setStatus(`✓ Snapshot saved: ${name}`);
+		setSnapshotName(""); // Clear input after saving
 	};
 
 	return (
@@ -363,6 +376,53 @@ const Dashboard: Component = () => {
 								{status()}
 							</div>
 						</Show>
+					</div>
+
+					{/* Take Snapshot */}
+					<div
+						style={{ ...cardStyle, padding: "14px", "margin-bottom": "12px" }}
+					>
+						<div style={{ "margin-bottom": "8px" }}>
+							<span style={labelStyle}>Take Snapshot</span>
+						</div>
+						<div style={{ display: "flex", gap: "8px" }}>
+							<input
+								type="text"
+								placeholder="Snapshot name (optional)"
+								value={snapshotName()}
+								onInput={(e) => setSnapshotName(e.currentTarget.value)}
+								style={{ ...inputStyle, flex: 1 }}
+							/>
+							<button
+								type="button"
+								onClick={handleTakeSnapshot}
+								disabled={!hasData()}
+								style={{
+									padding: "8px 16px",
+									background: hasData() ? "#3b82f6" : "#1e293b",
+									border: "1px solid",
+									"border-color": hasData() ? "#2563eb" : "#334155",
+									"border-radius": "6px",
+									color: hasData() ? "#f1f5f9" : "#475569",
+									"font-size": "12px",
+									...mono,
+									cursor: hasData() ? "pointer" : "not-allowed",
+									"white-space": "nowrap",
+								}}
+							>
+								Save
+							</button>
+						</div>
+						<div
+							style={{
+								"margin-top": "6px",
+								"font-size": "10px",
+								color: "#64748b",
+								...mono,
+							}}
+						>
+							Capture current sensor readings with a custom name
+						</div>
 					</div>
 
 					{/* Manual Entry */}

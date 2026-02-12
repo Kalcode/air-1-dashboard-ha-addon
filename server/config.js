@@ -82,9 +82,9 @@ export const ENTITY_MAPPINGS = {
 
 /**
  * Parse entity ID to extract device/room name
- * @param {string} entityId - Entity ID like "sensor.air1_bedroom_pm25"
- * @param {string} prefix - Sensor prefix like "air1"
- * @returns {object} - { device: "bedroom", sensor: "pm25" }
+ * @param {string} entityId - Entity ID like "sensor.apollo_air_1_2c77c8_esp_temperature"
+ * @param {string} prefix - Sensor prefix like "apollo_air_1"
+ * @returns {object} - { device: "2c77c8", sensor: "temperature" }
  */
 export function parseEntityId(entityId, prefix = 'air1') {
   // Remove "sensor." prefix if present
@@ -104,9 +104,11 @@ export function parseEntityId(entityId, prefix = 'air1') {
     };
   }
 
-  // Last part is the sensor type, everything else is the device/room name
+  // For Apollo AIR-1: first part is device ID (e.g., "2c77c8")
+  // Format: {device_id}_{component}_{sensor} or {device_id}_{sensor}
+  // We want just the device ID (usually a short hex code)
+  const device = parts[0];
   const sensor = parts[parts.length - 1];
-  const device = parts.slice(0, -1).join('_');
 
   return { device, sensor };
 }
