@@ -6,6 +6,10 @@ import solidJs from "@astrojs/solid-js";
 export default defineConfig({
 	output: "static",
 	integrations: [solidJs()],
-	// Use relative paths for Home Assistant ingress compatibility
-	base: "./",
+	build: {
+		// Use file format for simpler paths
+		format: "file"
+	},
+	// Empty base ensures relative paths without leading slash
+	base: ""
 });
