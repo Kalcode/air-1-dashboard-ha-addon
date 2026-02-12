@@ -3,12 +3,14 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
 
-# Build outputs
+# Build outputs (built inside Docker during addon installation)
 dashboard/dist/
 dashboard/.astro/
 *.log
+
+# Keep package-lock.json for reproducible builds
+# (Multi-stage Dockerfile uses these for faster installs)
 
 # Development
 .DS_Store
