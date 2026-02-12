@@ -23,12 +23,13 @@ bashio::log.info "  Sensor Prefix: ${SENSOR_PREFIX}"
 bashio::log.info "  Update Interval: ${UPDATE_INTERVAL} seconds"
 bashio::log.info "  History Days: ${HISTORY_DAYS} days"
 
-# Verify Node.js application exists
+# Verify server exists
 if [ ! -f "/app/server/server.js" ]; then
-    bashio::log.error "Server application not found at /app/server/server.js"
+    bashio::log.error "Server not found at /app/server/server.js"
     bashio::exit.nok
 fi
 
-# Start the Node.js server
-bashio::log.info "Starting Node.js server..."
-exec node /app/server/server.js
+# Start the server with Bun
+bashio::log.info "Starting server with Bun..."
+cd /app/server
+exec bun run server.js

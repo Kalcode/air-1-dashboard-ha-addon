@@ -9,7 +9,7 @@ dashboard/dist/
 dashboard/.astro/
 *.log
 
-# Keep package-lock.json for reproducible builds
+# Keep bun.lock for reproducible builds
 # (Multi-stage Dockerfile uses these for faster installs)
 
 # Development
@@ -35,8 +35,8 @@ Thumbs.db
 ehthumbs.db
 
 # Bun
-bun.lock
 .wrangler/
+*.lockb
 
 # Testing
 coverage/
@@ -45,3 +45,4 @@ coverage/
 # Local development
 tasks/
 *.output
+server-bin

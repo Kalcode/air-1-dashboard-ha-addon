@@ -3,29 +3,21 @@ ARG BUILD_FROM=ghcr.io/hassio-addons/base:15.0.1
 ###############################################################################
 # Stage 1: Build Dashboard (Astro + SolidJS)
 ###############################################################################
-FROM node:25-alpine AS dashboard-builder
+FROM oven/bun:1-alpine AS dashboard-builder
 
 WORKDIR /build
 
 # Copy dashboard package files
-COPY dashboard/package.json dashboard/bun.lock* dashboard/package-lock.json* ./
+COPY dashboard/package.json dashboard/bun.lock* ./
 
-# Install dependencies (try bun first, fallback to npm)
-RUN if [ -f "bun.lock" ]; then \
-      npm install -g bun && bun install; \
-    else \
-      npm ci || npm install; \
-    fi
+# Install dependencies with Bun
+RUN bun install --frozen-lockfile
 
 # Copy dashboard source
 COPY dashboard/ ./
 
 # Build the dashboard (outputs to dist/)
-RUN if command -v bun > /dev/null; then \
-      bun run build; \
-    else \
-      npm run build; \
-    fi
+RUN bun run build
 
 # Verify build output exists
 RUN test -d dist || (echo "ERROR: Dashboard build failed - dist/ not found" && exit 1)
@@ -33,25 +25,31 @@ RUN test -d dist || (echo "ERROR: Dashboard build failed - dist/ not found" && e
 ###############################################################################
 # Stage 2: Install Server Dependencies
 ###############################################################################
-FROM node:25-alpine AS server-builder
+FROM oven/bun:1-alpine AS server-deps
 
 WORKDIR /build
 
 # Copy server package files
-COPY server/package.json server/package-lock.json* ./
+COPY server/package.json server/bun.lock* ./
 
-# Install production dependencies only
-RUN npm ci --only=production || npm install --production
+# Install production dependencies with Bun
+RUN bun install --production --frozen-lockfile
 
 ###############################################################################
 # Stage 3: Runtime Image
 ###############################################################################
 FROM ${BUILD_FROM}
 
-# Install Node.js runtime
+# Install Bun runtime with required C++ libraries
+# Keep curl for Home Assistant Supervisor API communication
 RUN apk add --no-cache \
-    nodejs \
-    npm
+    curl \
+    unzip \
+    libstdc++ \
+    libgcc && \
+    curl -fsSL https://bun.sh/install | bash && \
+    ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
+    apk del unzip
 
 # Set working directory
 WORKDIR /app
@@ -60,7 +58,7 @@ WORKDIR /app
 COPY --from=dashboard-builder /build/dist /app/dashboard/dist
 
 # Copy server dependencies from stage 2
-COPY --from=server-builder /build/node_modules /app/server/node_modules
+COPY --from=server-deps /build/node_modules /app/server/node_modules
 
 # Copy server source code
 COPY server/package.json /app/server/
@@ -81,6 +79,6 @@ EXPOSE 8099
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8099/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8099/health || exit 1
 
 CMD ["/usr/bin/run.sh"]
