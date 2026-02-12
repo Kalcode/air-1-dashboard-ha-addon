@@ -1,4 +1,4 @@
-#!/usr/bin/env bashrc
+#!/usr/bin/env bash
 set -e
 
 # Configuration file path
