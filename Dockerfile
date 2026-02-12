@@ -48,11 +48,10 @@ RUN npm ci --only=production || npm install --production
 ###############################################################################
 FROM ${BUILD_FROM}
 
-# Install Node.js runtime and jq (for parsing options.json)
+# Install Node.js runtime
 RUN apk add --no-cache \
     nodejs \
-    npm \
-    jq
+    npm
 
 # Set working directory
 WORKDIR /app
