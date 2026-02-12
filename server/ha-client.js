@@ -36,6 +36,32 @@ export async function fetchSensors(prefix = 'air1') {
     const pattern = new RegExp(`^sensor\\.${prefix}_`, 'i');
     const matchingSensors = states.filter(entity => pattern.test(entity.entity_id));
 
+    // Also find number.* offset entities for calibration
+    const offsetPattern = new RegExp(`^number\\.${prefix}_.*_offset$`, 'i');
+    const offsets = states.filter(entity => offsetPattern.test(entity.entity_id));
+    if (offsets.length > 0) {
+      console.log(`[HA Client] Found ${offsets.length} offset entities:`, offsets.map(o => `${o.entity_id}=${o.state}`));
+    }
+
+    // Attach offsets to matching sensors so transformEntity can use them
+    // e.g. sensor.apollo_air_1_2c77c8_sen55_temperature
+    //   -> number.apollo_air_1_2c77c8_sen55_temperature_offset
+    for (const sensor of matchingSensors) {
+      const sensorBase = sensor.entity_id.replace(/^sensor\./, '');
+      const matchingOffset = offsets.find(o => {
+        const offsetBase = o.entity_id.replace(/^number\./, '').replace(/_offset$/, '');
+        return sensorBase === offsetBase;
+      });
+      if (matchingOffset) {
+        const offsetVal = parseFloat(matchingOffset.state);
+        if (!isNaN(offsetVal)) {
+          sensor._offset = offsetVal;
+          sensor._offset_entity = matchingOffset.entity_id;
+          console.log(`[HA Client] Matched offset ${matchingOffset.entity_id}=${offsetVal} to ${sensor.entity_id}`);
+        }
+      }
+    }
+
     console.log(`[HA Client] Found ${matchingSensors.length} matching sensors`);
 
     return matchingSensors;
@@ -140,11 +166,27 @@ function transformEntity(entity, prefix = 'air1') {
 
   // Parse state value
   let value = null;
+  let unit = entity.attributes?.unit_of_measurement || null;
   if (entity.state && entity.state !== 'unknown' && entity.state !== 'unavailable') {
     const parsed = parseFloat(entity.state);
     if (!isNaN(parsed)) {
       value = parsed;
     }
+  }
+
+  // Convert Fahrenheit to Celsius for temperature sensors
+  if (sensorType === 'temperature' && value !== null && unit === '°F') {
+    const beforeConvert = value;
+    value = Math.round(((value - 32) * 5 / 9) * 100) / 100;
+    unit = '°C';
+    console.log(`[HA Client] Converted temperature from °F to °C: ${beforeConvert}°F → ${value}°C`);
+  }
+
+  // Apply calibration offset after unit conversion (offset is in °C)
+  if (value !== null && entity._offset != null) {
+    const before = value;
+    value = Math.round((value + entity._offset) * 100) / 100;
+    console.log(`[HA Client] Applied offset ${entity._offset}°C to ${entity.entity_id}: ${before}°C → ${value}°C (from ${entity._offset_entity})`);
   }
 
   return {
@@ -154,7 +196,7 @@ function transformEntity(entity, prefix = 'air1') {
     sensor: sensor,
     sensor_type: sensorType,
     value: value,
-    unit: entity.attributes?.unit_of_measurement || null,
+    unit: unit,
     state: entity.state,
     friendly_name: entity.attributes?.friendly_name || entity.entity_id,
     device_class: entity.attributes?.device_class || null,
