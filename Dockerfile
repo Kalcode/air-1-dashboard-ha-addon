@@ -3,7 +3,7 @@ ARG BUILD_FROM=ghcr.io/hassio-addons/base:15.0.1
 ###############################################################################
 # Stage 1: Build Dashboard (Astro + SolidJS)
 ###############################################################################
-FROM node:20-alpine AS dashboard-builder
+FROM node:25-alpine AS dashboard-builder
 
 WORKDIR /build
 
@@ -33,7 +33,7 @@ RUN test -d dist || (echo "ERROR: Dashboard build failed - dist/ not found" && e
 ###############################################################################
 # Stage 2: Install Server Dependencies
 ###############################################################################
-FROM node:20-alpine AS server-builder
+FROM node:25-alpine AS server-builder
 
 WORKDIR /build
 
