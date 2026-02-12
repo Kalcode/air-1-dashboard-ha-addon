@@ -5,7 +5,19 @@ All notable changes to the Air-1 Quality Dashboard Home Assistant addon will be 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-XX-XX
+## [1.0.1] - 2025-02-11
+
+### Changed
+- Updated to Node.js 25 to match original project environment
+- Switched to bashio for proper HA addon integration
+- Added auth_api permission for HA API access
+- Attempted fix for ingress asset path handling (using empty base in Astro config)
+
+### Fixed
+- Fixed shebang in run.sh (bashrc → bash, then → bashio)
+- Removed jq dependency (now using bashio for config parsing)
+
+## [1.0.0] - 2025-02-11
 
 ### Added
 - Initial release of Air-1 Quality Dashboard as a Home Assistant addon

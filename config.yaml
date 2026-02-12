@@ -1,5 +1,5 @@
 name: "Air-1 Quality Dashboard"
-version: "1.0.0"
+version: "1.0.1"
 slug: air1_dashboard
 description: "Air quality visualization dashboard for Apollo AIR-1 ESPHome sensors with automatic data integration"
 url: "https://github.com/yourusername/air1-dashboard-ha-addon"
