@@ -1,42 +1,30 @@
-# EXAMPLE USAGE:
-#
-#   Refer for explanation to following link:
-#   https://lefthook.dev/configuration/
-#
-# pre-push:
-#   jobs:
-#     - name: packages audit
-#       tags:
-#         - frontend
-#         - security
-#       run: yarn audit
-#
-#     - name: gems audit
-#       tags:
-#         - backend
-#         - security
-#       run: bundle audit
-#
-# pre-commit:
-#   parallel: true
-#   jobs:
-#     - run: yarn eslint {staged_files}
-#       glob: "*.{js,ts,jsx,tsx}"
-#
-#     - name: rubocop
-#       glob: "*.rb"
-#       exclude:
-#         - config/application.rb
-#         - config/routes.rb
-#       run: bundle exec rubocop --force-exclusion {all_files}
-#
-#     - name: govet
-#       files: git ls-files -m
-#       glob: "*.go"
-#       run: go vet {files}
-#
-#     - script: "hello.js"
-#       runner: node
-#
-#     - script: "hello.go"
-#       runner: go run
+# Lefthook configuration for Air-1 Dashboard
+# https://lefthook.dev/configuration/
+
+# Enforce conventional commits
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}
+
+# Run linting and formatting on changed files
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      glob: "*.{js,ts,jsx,tsx,json,astro}"
+      run: bunx @biomejs/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: bun run typecheck
+
+# Validate versions and run checks before pushing
+pre-push:
+  commands:
+    version-check:
+      run: bun scripts/validate-versions.ts
+
+    build-check:
+      run: bun run build

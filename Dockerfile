@@ -5,12 +5,16 @@ ARG BUILD_FROM=ghcr.io/hassio-addons/base:15.0.1
 ###############################################################################
 FROM oven/bun:1-alpine AS dashboard-builder
 
-WORKDIR /build
+WORKDIR /workspace
+
+# Copy root tsconfig (needed for dashboard tsconfig extends)
+COPY tsconfig.json ./
 
 # Copy dashboard package files
-COPY dashboard/package.json dashboard/bun.lock* ./
+COPY dashboard/package.json dashboard/bun.lock* ./dashboard/
 
 # Install dependencies with Bun
+WORKDIR /workspace/dashboard
 RUN bun install --frozen-lockfile
 
 # Copy dashboard source
@@ -55,7 +59,7 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy built dashboard from stage 1
-COPY --from=dashboard-builder /build/dist /app/dashboard/dist
+COPY --from=dashboard-builder /workspace/dashboard/dist /app/dashboard/dist
 
 # Copy server dependencies from stage 2
 COPY --from=server-deps /build/node_modules /app/server/node_modules

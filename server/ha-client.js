@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import { extractSensorType, parseEntityId, getDeviceName } from './config.js';
+import { extractSensorType, getDeviceName, parseEntityId } from './config.js';
 
 const HA_API_BASE = process.env.HA_API_BASE || 'http://supervisor/core/api';
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN;
@@ -14,10 +14,10 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN;
 const haClient = axios.create({
   baseURL: HA_API_BASE,
   headers: {
-    'Authorization': `Bearer ${SUPERVISOR_TOKEN}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
+    'Content-Type': 'application/json',
   },
-  timeout: 30000 // 30 second timeout
+  timeout: 30000, // 30 second timeout
 });
 
 /**
@@ -34,13 +34,16 @@ export async function fetchSensors(prefix = 'air1') {
 
     // Filter for sensors matching the prefix
     const pattern = new RegExp(`^sensor\\.${prefix}_`, 'i');
-    const matchingSensors = states.filter(entity => pattern.test(entity.entity_id));
+    const matchingSensors = states.filter((entity) => pattern.test(entity.entity_id));
 
     // Also find number.* offset entities for calibration
     const offsetPattern = new RegExp(`^number\\.${prefix}_.*_offset$`, 'i');
-    const offsets = states.filter(entity => offsetPattern.test(entity.entity_id));
+    const offsets = states.filter((entity) => offsetPattern.test(entity.entity_id));
     if (offsets.length > 0) {
-      console.log(`[HA Client] Found ${offsets.length} offset entities:`, offsets.map(o => `${o.entity_id}=${o.state}`));
+      console.log(
+        `[HA Client] Found ${offsets.length} offset entities:`,
+        offsets.map((o) => `${o.entity_id}=${o.state}`),
+      );
     }
 
     // Attach offsets to matching sensors so transformEntity can use them
@@ -48,13 +51,13 @@ export async function fetchSensors(prefix = 'air1') {
     //   -> number.apollo_air_1_2c77c8_sen55_temperature_offset
     for (const sensor of matchingSensors) {
       const sensorBase = sensor.entity_id.replace(/^sensor\./, '');
-      const matchingOffset = offsets.find(o => {
+      const matchingOffset = offsets.find((o) => {
         const offsetBase = o.entity_id.replace(/^number\./, '').replace(/_offset$/, '');
         return sensorBase === offsetBase;
       });
       if (matchingOffset) {
-        const offsetVal = parseFloat(matchingOffset.state);
-        if (!isNaN(offsetVal)) {
+        const offsetVal = Number.parseFloat(matchingOffset.state);
+        if (!Number.isNaN(offsetVal)) {
           sensor._offset = offsetVal;
           sensor._offset_entity = matchingOffset.entity_id;
           console.log(`[HA Client] Matched offset ${matchingOffset.entity_id}=${offsetVal} to ${sensor.entity_id}`);
@@ -122,7 +125,7 @@ export async function fetchHistory(entityId, start = null, end = null) {
     // HA history API endpoint format: /history/period/{start_time}?filter_entity_id={entity_id}&end_time={end_time}
     const params = new URLSearchParams({
       filter_entity_id: entityId,
-      end_time: endTime
+      end_time: endTime,
     });
 
     const url = `/history/period/${startTime}?${params.toString()}`;
@@ -168,8 +171,8 @@ function transformEntity(entity, prefix = 'air1') {
   let value = null;
   let unit = entity.attributes?.unit_of_measurement || null;
   if (entity.state && entity.state !== 'unknown' && entity.state !== 'unavailable') {
-    const parsed = parseFloat(entity.state);
-    if (!isNaN(parsed)) {
+    const parsed = Number.parseFloat(entity.state);
+    if (!Number.isNaN(parsed)) {
       value = parsed;
     }
   }
@@ -177,7 +180,7 @@ function transformEntity(entity, prefix = 'air1') {
   // Convert Fahrenheit to Celsius for temperature sensors
   if (sensorType === 'temperature' && value !== null && unit === '°F') {
     const beforeConvert = value;
-    value = Math.round(((value - 32) * 5 / 9) * 100) / 100;
+    value = Math.round((((value - 32) * 5) / 9) * 100) / 100;
     unit = '°C';
     console.log(`[HA Client] Converted temperature from °F to °C: ${beforeConvert}°F → ${value}°C`);
   }
@@ -186,7 +189,9 @@ function transformEntity(entity, prefix = 'air1') {
   if (value !== null && entity._offset != null) {
     const before = value;
     value = Math.round((value + entity._offset) * 100) / 100;
-    console.log(`[HA Client] Applied offset ${entity._offset}°C to ${entity.entity_id}: ${before}°C → ${value}°C (from ${entity._offset_entity})`);
+    console.log(
+      `[HA Client] Applied offset ${entity._offset}°C to ${entity.entity_id}: ${before}°C → ${value}°C (from ${entity._offset_entity})`,
+    );
   }
 
   return {
@@ -202,7 +207,7 @@ function transformEntity(entity, prefix = 'air1') {
     device_class: entity.attributes?.device_class || null,
     last_updated: entity.last_updated,
     last_changed: entity.last_changed,
-    attributes: entity.attributes || {}
+    attributes: entity.attributes || {},
   };
 }
 
@@ -218,7 +223,7 @@ export function transformEntityToSensorData(entities, prefix = 'air1') {
     return [];
   }
 
-  return entities.map(entity => transformEntity(entity, prefix));
+  return entities.map((entity) => transformEntity(entity, prefix));
 }
 
 /**
@@ -233,12 +238,12 @@ export function transformHistoryData(historyData) {
   }
 
   return historyData
-    .map(record => {
+    .map((record) => {
       // Parse state value
       let value = null;
       if (record.state && record.state !== 'unknown' && record.state !== 'unavailable') {
-        const parsed = parseFloat(record.state);
-        if (!isNaN(parsed)) {
+        const parsed = Number.parseFloat(record.state);
+        if (!Number.isNaN(parsed)) {
           value = parsed;
         }
       }
@@ -247,10 +252,10 @@ export function transformHistoryData(historyData) {
         timestamp: record.last_updated,
         value: value,
         state: record.state,
-        attributes: record.attributes || {}
+        attributes: record.attributes || {},
       };
     })
-    .filter(record => record.value !== null); // Filter out invalid records
+    .filter((record) => record.value !== null); // Filter out invalid records
 }
 
 /**
@@ -295,5 +300,5 @@ export default {
   transformEntityToSensorData,
   transformHistoryData,
   testConnection,
-  fetchConfig
+  fetchConfig,
 };

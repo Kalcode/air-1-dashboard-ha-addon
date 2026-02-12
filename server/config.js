@@ -6,78 +6,17 @@
  */
 
 export const ENTITY_MAPPINGS = {
-  pm25: [
-    'pm_2_5',
-    'pm25',
-    'pm_2.5',
-    'pm_2_5_concentration',
-    'particulate_matter_2_5',
-    'particulate_matter_25'
-  ],
-  pm10: [
-    'pm_10',
-    'pm10',
-    'pm_10_concentration',
-    'particulate_matter_10',
-    'particulate_matter_100'
-  ],
-  pm_1um: [
-    'pm_1_0',
-    'pm1',
-    'pm_1',
-    'pm_1_0_concentration',
-    'particulate_matter_1_0',
-    'particulate_matter_10'
-  ],
-  pm_4um: [
-    'pm_4_0',
-    'pm4',
-    'pm_4',
-    'pm_4_0_concentration',
-    'particulate_matter_4_0',
-    'particulate_matter_40'
-  ],
-  co2: [
-    'co2',
-    'carbon_dioxide',
-    'co2_concentration',
-    'carbondioxide'
-  ],
-  voc: [
-    'voc',
-    'tvoc',
-    'volatile_organic_compounds',
-    'voc_index',
-    'total_volatile_organic_compounds'
-  ],
-  humidity: [
-    'humidity',
-    'relative_humidity',
-    'rh'
-  ],
-  temperature: [
-    'temperature',
-    'temp',
-    'air_temperature'
-  ],
-  pressure: [
-    'pressure',
-    'atmospheric_pressure',
-    'air_pressure',
-    'barometric_pressure'
-  ],
-  nox: [
-    'nox',
-    'nitrogen_oxides',
-    'nox_index',
-    'nitrogen_oxide'
-  ],
-  rssi: [
-    'rssi',
-    'wifi_signal',
-    'signal_strength',
-    'wifi_rssi'
-  ]
+  pm25: ['pm_2_5', 'pm25', 'pm_2.5', 'pm_2_5_concentration', 'particulate_matter_2_5', 'particulate_matter_25'],
+  pm10: ['pm_10', 'pm10', 'pm_10_concentration', 'particulate_matter_10', 'particulate_matter_100'],
+  pm_1um: ['pm_1_0', 'pm1', 'pm_1', 'pm_1_0_concentration', 'particulate_matter_1_0', 'particulate_matter_10'],
+  pm_4um: ['pm_4_0', 'pm4', 'pm_4', 'pm_4_0_concentration', 'particulate_matter_4_0', 'particulate_matter_40'],
+  co2: ['co2', 'carbon_dioxide', 'co2_concentration', 'carbondioxide'],
+  voc: ['voc', 'tvoc', 'volatile_organic_compounds', 'voc_index', 'total_volatile_organic_compounds'],
+  humidity: ['humidity', 'relative_humidity', 'rh'],
+  temperature: ['temperature', 'temp', 'air_temperature'],
+  pressure: ['pressure', 'atmospheric_pressure', 'air_pressure', 'barometric_pressure'],
+  nox: ['nox', 'nitrogen_oxides', 'nox_index', 'nitrogen_oxide'],
+  rssi: ['rssi', 'wifi_signal', 'signal_strength', 'wifi_rssi'],
 };
 
 /**
@@ -100,7 +39,7 @@ export function parseEntityId(entityId, prefix = 'air1') {
   if (parts.length < 2) {
     return {
       device: parts[0] || 'unknown',
-      sensor: 'unknown'
+      sensor: 'unknown',
     };
   }
 
@@ -146,13 +85,13 @@ export function findMatchingAttribute(attributes, possibleNames) {
     return null;
   }
 
-  const attributeKeys = Object.keys(attributes).map(k => k.toLowerCase());
+  const attributeKeys = Object.keys(attributes).map((k) => k.toLowerCase());
 
   for (const name of possibleNames) {
     const normalized = name.toLowerCase();
     if (attributeKeys.includes(normalized)) {
       // Return the original key with correct casing
-      return Object.keys(attributes).find(k => k.toLowerCase() === normalized);
+      return Object.keys(attributes).find((k) => k.toLowerCase() === normalized);
     }
   }
 
@@ -172,7 +111,7 @@ export function extractSensorType(entityId, attributes = {}, prefix = 'air1') {
 
   // Check direct mapping from entity ID
   for (const [type, possibleNames] of Object.entries(ENTITY_MAPPINGS)) {
-    if (possibleNames.some(name => normalizedSensor.includes(name.toLowerCase().replace(/_/g, '')))) {
+    if (possibleNames.some((name) => normalizedSensor.includes(name.toLowerCase().replace(/_/g, '')))) {
       return type;
     }
   }
@@ -182,17 +121,17 @@ export function extractSensorType(entityId, attributes = {}, prefix = 'air1') {
     const deviceClass = attributes.device_class.toLowerCase();
 
     const deviceClassMap = {
-      'pm25': 'pm25',
-      'pm10': 'pm10',
-      'pm1': 'pm_1um',
-      'pm4': 'pm_4um',
-      'carbon_dioxide': 'co2',
-      'volatile_organic_compounds': 'voc',
-      'humidity': 'humidity',
-      'temperature': 'temperature',
-      'pressure': 'pressure',
-      'nitrogen_oxides': 'nox',
-      'signal_strength': 'rssi'
+      pm25: 'pm25',
+      pm10: 'pm10',
+      pm1: 'pm_1um',
+      pm4: 'pm_4um',
+      carbon_dioxide: 'co2',
+      volatile_organic_compounds: 'voc',
+      humidity: 'humidity',
+      temperature: 'temperature',
+      pressure: 'pressure',
+      nitrogen_oxides: 'nox',
+      signal_strength: 'rssi',
     };
 
     if (deviceClassMap[deviceClass]) {
@@ -206,13 +145,13 @@ export function extractSensorType(entityId, attributes = {}, prefix = 'air1') {
 
     const unitMap = {
       'µg/m³': 'pm25', // Could be pm25, pm10, etc.
-      'ppm': 'co2',
+      ppm: 'co2',
       '%': 'humidity',
       '°c': 'temperature',
       '°f': 'temperature',
-      'hpa': 'pressure',
-      'mbar': 'pressure',
-      'dbm': 'rssi'
+      hpa: 'pressure',
+      mbar: 'pressure',
+      dbm: 'rssi',
     };
 
     if (unitMap[unit]) {
@@ -233,7 +172,7 @@ export function getDeviceName(device) {
 
   return device
     .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 
@@ -243,5 +182,5 @@ export default {
   groupEntitiesByDevice,
   findMatchingAttribute,
   extractSensorType,
-  getDeviceName
+  getDeviceName,
 };

@@ -10,20 +10,15 @@
  *   node test-example.js
  */
 
+import { extractSensorType, getDeviceName, groupEntitiesByDevice, parseEntityId } from './config.js';
 import {
+  fetchHistory,
   fetchSensors,
   fetchState,
-  fetchHistory,
+  testConnection,
   transformEntityToSensorData,
   transformHistoryData,
-  testConnection
 } from './ha-client.js';
-import {
-  parseEntityId,
-  groupEntitiesByDevice,
-  extractSensorType,
-  getDeviceName
-} from './config.js';
 
 async function runTests() {
   console.log('='.repeat(60));
@@ -45,11 +40,7 @@ async function runTests() {
   // Test 2: Parse Entity ID
   console.log('[Test 2] Parse Entity ID');
   console.log('-'.repeat(60));
-  const testEntityIds = [
-    'sensor.air1_bedroom_pm25',
-    'sensor.air1_living_room_temperature',
-    'sensor.air1_office_co2'
-  ];
+  const testEntityIds = ['sensor.air1_bedroom_pm25', 'sensor.air1_living_room_temperature', 'sensor.air1_office_co2'];
 
   for (const entityId of testEntityIds) {
     const parsed = parseEntityId(entityId, 'air1');
@@ -68,7 +59,7 @@ async function runTests() {
 
     if (sensors.length > 0) {
       // Show first 5 sensors
-      sensors.slice(0, 5).forEach(sensor => {
+      sensors.slice(0, 5).forEach((sensor) => {
         console.log(`  - ${sensor.entity_id}: ${sensor.state} ${sensor.attributes?.unit_of_measurement || ''}`);
       });
 
@@ -189,7 +180,7 @@ async function runTests() {
     { id: 'sensor.air1_bedroom_pm25', attrs: { device_class: 'pm25' } },
     { id: 'sensor.air1_living_room_co2', attrs: { device_class: 'carbon_dioxide' } },
     { id: 'sensor.air1_office_temperature', attrs: { unit_of_measurement: '°C' } },
-    { id: 'sensor.air1_kitchen_humidity', attrs: { unit_of_measurement: '%' } }
+    { id: 'sensor.air1_kitchen_humidity', attrs: { unit_of_measurement: '%' } },
   ];
 
   for (const test of testSensorIds) {
@@ -205,7 +196,7 @@ async function runTests() {
 }
 
 // Run tests
-runTests().catch(error => {
+runTests().catch((error) => {
   console.error('Test runner failed:', error);
   process.exit(1);
 });

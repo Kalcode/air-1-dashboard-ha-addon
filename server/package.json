@@ -1,19 +1,14 @@
 {
-  "name": "air1-dashboard-server",
-  "version": "1.0.0",
+  "name": "@air1/server",
+  "version": "1.2.4",
   "description": "Express server for Air-1 Dashboard Home Assistant addon",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "bun server.js",
-    "dev": "bun --watch server.js",
-    "build": "bun build server.js --compile --target=bun-linux-x64-musl --minify --sourcemap --bytecode --outfile=server-bin"
+    "dev": "bun --watch server.js"
   },
-  "keywords": [
-    "homeassistant",
-    "air-quality",
-    "dashboard"
-  ],
+  "keywords": ["homeassistant", "air-quality", "dashboard"],
   "author": "",
   "license": "MIT",
   "dependencies": {

@@ -10,10 +10,10 @@
  * Then open: http://localhost:8099
  */
 
-import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import compression from 'compression';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import express from 'express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,7 +97,7 @@ app.get('/api/config', (req, res) => {
 
 // GET /api/sensors - Discover available sensors
 app.get('/api/sensors', (req, res) => {
-  const devices = Object.values(MOCK_SENSORS).map(sensor => ({
+  const devices = Object.values(MOCK_SENSORS).map((sensor) => ({
     entity_id: sensor.entity_id,
     friendly_name: sensor.friendly_name,
     room: sensor.room,
@@ -128,7 +128,7 @@ app.get('/api/sensors/:entity_id', (req, res) => {
 // GET /api/history/:entity_id - Get historical data
 app.get('/api/history/:entity_id', (req, res) => {
   const entityId = req.params.entity_id;
-  const days = parseInt(req.query.days) || 30;
+  const days = Number.parseInt(req.query.days) || 30;
 
   if (!MOCK_SENSORS[entityId]) {
     return res.status(404).json({
@@ -144,7 +144,7 @@ app.get('/api/history/:entity_id', (req, res) => {
   const totalReadings = Math.min(days * intervalsPerDay, 200); // Cap at 200 readings
 
   for (let i = 0; i < totalReadings; i++) {
-    const timestamp = now - (i * 3600000); // Go back in time by hours
+    const timestamp = now - i * 3600000; // Go back in time by hours
     const reading = generateMockReading(entityId);
 
     history.push({
@@ -187,9 +187,9 @@ app.listen(PORT, () => {
   console.log('╚════════════════════════════════════════════════════════╝\n');
   console.log(`  📡 Server running on: http://localhost:${PORT}`);
   console.log(`  📂 Serving files from: ${distPath}`);
-  console.log(`  🎭 Mode: MOCK DATA (fake sensors)\n`);
+  console.log('  🎭 Mode: MOCK DATA (fake sensors)\n');
   console.log('  Available mock sensors:');
-  Object.values(MOCK_SENSORS).forEach(sensor => {
+  Object.values(MOCK_SENSORS).forEach((sensor) => {
     console.log(`    • ${sensor.friendly_name} (${sensor.entity_id})`);
   });
   console.log('\n  📊 API Endpoints:');

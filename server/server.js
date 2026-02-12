@@ -5,20 +5,20 @@
  * for air quality sensor data and serves the dashboard frontend.
  */
 
-import express from 'express';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import compression from 'compression';
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import express from 'express';
+import { groupEntitiesByDevice } from './config.js';
 import {
+  fetchHistory,
   fetchSensors,
   fetchState,
-  fetchHistory,
+  testConnection,
   transformEntityToSensorData,
   transformHistoryData,
-  testConnection
 } from './ha-client.js';
-import { groupEntitiesByDevice } from './config.js';
 
 // Get current file's directory
 const __filename = fileURLToPath(import.meta.url);
@@ -33,7 +33,7 @@ const STATIC_PATH = process.env.STATIC_PATH || '/app/dashboard/dist';
 const DEFAULT_CONFIG = {
   sensor_prefix: 'apollo_air_1',
   update_interval: 10,
-  history_days: 30
+  history_days: 30,
 };
 
 let appConfig = { ...DEFAULT_CONFIG };
@@ -49,7 +49,7 @@ async function loadConfig() {
 
     appConfig = {
       ...DEFAULT_CONFIG,
-      ...parsedConfig
+      ...parsedConfig,
     };
 
     console.log('[Server] Configuration loaded:', appConfig);
@@ -103,8 +103,8 @@ function createApp() {
       config: {
         sensor_prefix: appConfig.sensor_prefix,
         update_interval: appConfig.update_interval,
-        history_days: appConfig.history_days
-      }
+        history_days: appConfig.history_days,
+      },
     });
   });
 
@@ -118,14 +118,14 @@ function createApp() {
     try {
       res.json({
         success: true,
-        data: appConfig
+        data: appConfig,
       });
     } catch (error) {
       console.error('[Server] Error in /api/config:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to retrieve configuration',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -144,7 +144,7 @@ function createApp() {
         return res.json({
           success: true,
           devices: [],
-          message: `No sensors found with prefix "${appConfig.sensor_prefix}"`
+          message: `No sensors found with prefix "${appConfig.sensor_prefix}"`,
         });
       }
 
@@ -154,11 +154,14 @@ function createApp() {
       // Transform each device's entities into a device object
       const devices = Object.entries(grouped).map(([deviceId, deviceEntities]) => {
         console.log(`\n[Server] Processing device: ${deviceId}`);
-        console.log(`[Server] Raw entities for ${deviceId}:`, deviceEntities.map(e => ({
-          entity_id: e.entity_id,
-          state: e.state,
-          unit: e.unit_of_measurement
-        })));
+        console.log(
+          `[Server] Raw entities for ${deviceId}:`,
+          deviceEntities.map((e) => ({
+            entity_id: e.entity_id,
+            state: e.state,
+            unit: e.unit_of_measurement,
+          })),
+        );
 
         // Get device metadata from first entity
         const firstEntity = deviceEntities[0];
@@ -184,7 +187,7 @@ function createApp() {
           device_name: deviceName,
           friendly_name: `Apollo AIR-1 ${deviceName}`,
           room: null, // Could extract from entity names if needed
-          ...combinedSensorData // Merge all sensor readings (co2, pm25, temperature, etc.)
+          ...combinedSensorData, // Merge all sensor readings (co2, pm25, temperature, etc.)
         };
       });
 
@@ -193,14 +196,14 @@ function createApp() {
       res.json({
         success: true,
         devices: devices,
-        count: devices.length
+        count: devices.length,
       });
     } catch (error) {
       console.error('[Server] Error in /api/sensors:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch sensors',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -219,7 +222,7 @@ function createApp() {
       if (!entity_id || !entity_id.includes('.')) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid entity_id format'
+          error: 'Invalid entity_id format',
         });
       }
 
@@ -230,7 +233,7 @@ function createApp() {
 
       res.json({
         success: true,
-        data: sensorData
+        data: sensorData,
       });
     } catch (error) {
       console.error(`[Server] Error in /api/sensors/${req.params.entity_id}:`, error);
@@ -240,7 +243,7 @@ function createApp() {
       res.status(statusCode).json({
         success: false,
         error: 'Failed to fetch sensor state',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -262,25 +265,23 @@ function createApp() {
       if (!entity_id || !entity_id.includes('.')) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid entity_id format'
+          error: 'Invalid entity_id format',
         });
       }
 
       // Calculate time range
       if (!start && days) {
-        const daysNum = parseInt(days, 10);
-        if (isNaN(daysNum) || daysNum < 1) {
+        const daysNum = Number.parseInt(days, 10);
+        if (Number.isNaN(daysNum) || daysNum < 1) {
           return res.status(400).json({
             success: false,
-            error: 'Invalid days parameter'
+            error: 'Invalid days parameter',
           });
         }
         start = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000).toISOString();
       } else if (!start) {
         // Use configured history_days as default
-        start = new Date(
-          Date.now() - appConfig.history_days * 24 * 60 * 60 * 1000
-        ).toISOString();
+        start = new Date(Date.now() - appConfig.history_days * 24 * 60 * 60 * 1000).toISOString();
       }
 
       if (!end) {
@@ -301,8 +302,8 @@ function createApp() {
           start: start,
           end: end,
           count: transformedData.length,
-          history: transformedData
-        }
+          history: transformedData,
+        },
       });
     } catch (error) {
       console.error(`[Server] Error in /api/history/${req.params.entity_id}:`, error);
@@ -310,7 +311,7 @@ function createApp() {
       res.status(500).json({
         success: false,
         error: 'Failed to fetch history data',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -328,7 +329,7 @@ function createApp() {
     if (normalizedPath.startsWith('/api/')) {
       return res.status(404).json({
         success: false,
-        error: 'API endpoint not found'
+        error: 'API endpoint not found',
       });
     }
 
@@ -339,7 +340,7 @@ function createApp() {
         console.error('[Server] Error serving index.html:', err);
         res.status(500).json({
           success: false,
-          error: 'Failed to serve application'
+          error: 'Failed to serve application',
         });
       }
     });
@@ -352,7 +353,7 @@ function createApp() {
     res.status(500).json({
       success: false,
       error: 'Internal server error',
-      message: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined,
     });
   });
 
@@ -386,7 +387,9 @@ async function startServer() {
     const server = app.listen(PORT, () => {
       console.log(`[Server] Server listening on port ${PORT}`);
       console.log(`[Server] Static files served from: ${STATIC_PATH}`);
-      console.log(`[Server] Configuration: sensor_prefix="${appConfig.sensor_prefix}", update_interval=${appConfig.update_interval}s, history_days=${appConfig.history_days}`);
+      console.log(
+        `[Server] Configuration: sensor_prefix="${appConfig.sensor_prefix}", update_interval=${appConfig.update_interval}s, history_days=${appConfig.history_days}`,
+      );
       console.log('[Server] Ready to handle requests');
     });
 

@@ -1,0 +1,48 @@
+# Dependencies
+**/node_modules/
+**/bun.lockb
+
+# Build outputs
+**/dist/
+**/.astro/
+**/.wrangler/
+
+# Development files
+**/.git/
+**/.gitignore
+**/.vscode/
+**/.claude/
+**/.DS_Store
+
+# Test and local development
+**/test-docker.sh
+**/dev-server.js
+**/test-example.js
+
+# Documentation
+**/*.md
+!config.yaml
+
+# Scripts and configs not needed in container
+/scripts/
+/build.sh
+/lefthook.yml
+/cliff.toml
+/commitlint.config.js
+/biome.json
+/package.json
+/package-lock.json
+
+# Note: tsconfig.json is needed for dashboard build (extends from it)
+
+# Keep only necessary files for the build
+!dashboard/src/
+!dashboard/public/
+!dashboard/astro.config.mjs
+!dashboard/tsconfig.json
+!dashboard/package.json
+!server/*.js
+!server/package.json
+!rootfs/
+!config.yaml
+!Dockerfile

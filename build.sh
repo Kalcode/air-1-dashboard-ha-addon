@@ -29,30 +29,23 @@ fi
 echo -e "${GREEN}✓ Dashboard source found${NC}"
 echo ""
 
-# Step 2: Install dashboard dependencies
-echo "Step 2: Installing dashboard dependencies..."
-cd dashboard
-if command -v bun &> /dev/null; then
-    echo "Using Bun package manager..."
-    bun install
-elif command -v npm &> /dev/null; then
-    echo "Using npm package manager..."
-    npm install
-else
-    echo -e "${RED}Error: Neither bun nor npm found!${NC}"
-    echo "Please install Node.js and npm or Bun to build the dashboard."
+# Step 2: Install all workspace dependencies
+echo "Step 2: Installing workspace dependencies..."
+if ! command -v bun &> /dev/null; then
+    echo -e "${RED}Error: Bun not found!${NC}"
+    echo "This project requires Bun. Install from: https://bun.sh"
     exit 1
 fi
+
+echo "Using Bun workspace..."
+bun install
 echo -e "${GREEN}✓ Dependencies installed${NC}"
 echo ""
 
 # Step 3: Build the dashboard
 echo "Step 3: Building dashboard..."
-if command -v bun &> /dev/null; then
-    bun run build
-else
-    npm run build
-fi
+cd dashboard
+bun run build
 
 if [ ! -d "dist" ]; then
     echo -e "${RED}Error: Build failed - dist directory not created${NC}"
@@ -67,25 +60,17 @@ DIST_SIZE=$(du -sh dist | cut -f1)
 echo "Built dashboard size: $DIST_SIZE"
 echo ""
 
-# Step 5: Install server dependencies
-echo "Step 4: Installing server dependencies..."
-cd "$BUILD_DIR/server"
-if [ ! -f "package.json" ]; then
+# Step 4: Verify server exists
+echo "Step 4: Verifying server..."
+cd "$BUILD_DIR"
+if [ ! -f "server/package.json" ]; then
     echo -e "${RED}Error: server/package.json not found!${NC}"
     exit 1
 fi
-
-# Use npm install for initial setup, npm ci requires package-lock.json
-if [ -f "package-lock.json" ]; then
-    npm ci --only=production
-else
-    echo "No package-lock.json found, using npm install..."
-    npm install --production
-fi
-echo -e "${GREEN}✓ Server dependencies installed${NC}"
+echo -e "${GREEN}✓ Server verified (dependencies installed via workspace)${NC}"
 echo ""
 
-# Step 6: Summary
+# Step 5: Summary
 cd "$BUILD_DIR"
 echo "========================================="
 echo -e "${GREEN}Build Complete!${NC}"
