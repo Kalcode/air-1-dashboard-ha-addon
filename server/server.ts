@@ -76,12 +76,15 @@ function createApp(): Express {
   app.use(compression()); // Enable gzip compression
   app.use(express.json()); // Parse JSON request bodies
 
-  // Request logging middleware
+  // Request logging middleware (only log slow requests or errors)
   app.use((req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(`[Server] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+      // Only log slow requests (>1s) or errors
+      if (duration > 1000 || res.statusCode >= 400) {
+        console.log(`[Server] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+      }
     });
     next();
   });
@@ -94,12 +97,12 @@ function createApp(): Express {
     next();
   });
 
-  // Log all incoming requests for debugging
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const ingressPath = req.headers['x-ingress-path'];
-    console.log(`[Server] ${req.method} ${req.path} | Ingress: ${ingressPath || 'NOT SET'}`);
-    next();
-  });
+  // Ingress path debugging (disabled by default, uncomment if needed)
+  // app.use((req: Request, res: Response, next: NextFunction) => {
+  //   const ingressPath = req.headers['x-ingress-path'];
+  //   console.log(`[Server] ${req.method} ${req.path} | Ingress: ${ingressPath || 'NOT SET'}`);
+  //   next();
+  // });
 
   // Health check endpoint
   app.get('/health', (req: Request, res: Response) => {
@@ -142,8 +145,6 @@ function createApp(): Express {
    */
   app.get('/api/sensors', async (req: Request, res: Response) => {
     try {
-      console.log(`[Server] Fetching sensors with prefix: ${appConfig.sensor_prefix}`);
-
       const entities = await fetchSensors(appConfig.sensor_prefix);
 
       if (entities.length === 0) {
@@ -159,23 +160,12 @@ function createApp(): Express {
 
       // Transform each device's entities into a device object
       const devices: Device[] = Object.entries(grouped).map(([deviceId, deviceEntities]) => {
-        console.log(`\n[Server] Processing device: ${deviceId}`);
-        console.log(
-          `[Server] Raw entities for ${deviceId}:`,
-          deviceEntities.map((e) => ({
-            entity_id: e.entity_id,
-            state: e.state,
-            unit: e.attributes?.unit_of_measurement,
-          })),
-        );
-
         // Get device metadata from first entity
         const firstEntity = deviceEntities[0];
         const deviceName = firstEntity.attributes?.friendly_name || deviceId;
 
         // Transform entities to sensor data array
         const sensorDataArray = transformEntityToSensorData(deviceEntities, appConfig.sensor_prefix);
-        console.log(`[Server] Transformed sensor data for ${deviceId}:`, sensorDataArray);
 
         // Combine all sensor readings into a single device object
         const combinedSensorData: Partial<Device> = {};
@@ -185,7 +175,6 @@ function createApp(): Express {
             (combinedSensorData as Record<string, unknown>)[sensor.sensor_type] = sensor.value;
           }
         }
-        console.log(`[Server] Combined sensor data for ${deviceId}:`, combinedSensorData);
 
         return {
           entity_id: deviceId,
@@ -196,8 +185,6 @@ function createApp(): Express {
           ...combinedSensorData, // Merge all sensor readings (co2, pm25, temperature, etc.)
         } as Device;
       });
-
-      console.log(`[Server] Discovered ${devices.length} device(s) with ${entities.length} sensor entities`);
 
       res.json({
         success: true,
@@ -221,8 +208,6 @@ function createApp(): Express {
   app.get('/api/sensors/:entity_id', async (req: Request, res: Response) => {
     try {
       const { entity_id } = req.params;
-
-      console.log(`[Server] Fetching state for entity: ${entity_id}`);
 
       // Validate entity_id format
       if (!entity_id || !entity_id.includes('.')) {
@@ -295,8 +280,6 @@ function createApp(): Express {
       }
 
       const endTime = end ? (end as string) : new Date().toISOString();
-
-      console.log(`[Server] Fetching history for ${entity_id} from ${startTime} to ${endTime}`);
 
       const historyData = await fetchHistory(entity_id, startTime, endTime);
 

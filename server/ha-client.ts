@@ -48,8 +48,6 @@ async function haFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
  */
 export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
   try {
-    console.log(`[HA Client] Fetching sensors with prefix: ${prefix}`);
-
     const states = await haFetch<HAEntity[]>('/states');
 
     // Filter for sensors matching the prefix
@@ -85,8 +83,6 @@ export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
       }
     }
 
-    console.log(`[HA Client] Found ${matchingSensors.length} matching sensors`);
-
     return matchingSensors;
   } catch (error: unknown) {
     console.error('[HA Client] Error fetching sensors:', getErrorMessage(error));
@@ -101,8 +97,6 @@ export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
  */
 export async function fetchState(entityId: string): Promise<HAEntity> {
   try {
-    console.log(`[HA Client] Fetching state for entity: ${entityId}`);
-
     const entity = await haFetch<HAEntity>(`/states/${entityId}`);
 
     return entity;
@@ -128,8 +122,6 @@ export async function fetchState(entityId: string): Promise<HAEntity> {
  */
 export async function fetchHistory(entityId: string, start?: string, end?: string): Promise<HAHistoryRecord[]> {
   try {
-    console.log(`[HA Client] Fetching history for entity: ${entityId}`);
-
     // Build query parameters
     const params = new URLSearchParams();
     if (start) params.set('start_time', start);
@@ -142,8 +134,6 @@ export async function fetchHistory(entityId: string, start?: string, end?: strin
 
     // HA returns nested array: [[entity_history]]
     const entityHistory = history[0] || [];
-
-    console.log(`[HA Client] Retrieved ${entityHistory.length} history records`);
 
     return entityHistory;
   } catch (error: unknown) {
