@@ -1,5 +1,5 @@
 {
-  "name": "@air1/server",
+  "name": "server",
   "version": "1.2.4",
   "description": "Express server for Air-1 Dashboard Home Assistant addon",
   "type": "module",

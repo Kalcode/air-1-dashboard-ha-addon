@@ -2,10 +2,9 @@
 # https://git-cliff.org/docs/configuration
 
 [remote.github]
-# TODO: Update with actual GitHub owner/repo when remote is configured
-owner = "YOUR_GITHUB_USERNAME"
-repo = "air1-dashboard-ha-addon"
-token = ""  # Use GITHUB_TOKEN env var instead
+owner = "kalcode"
+repo = "air-1-dashboard-ha-addon"
+token = ""                        # Use GITHUB_TOKEN env var instead
 
 [changelog]
 header = """
