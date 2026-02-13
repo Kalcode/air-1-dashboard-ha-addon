@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.2.4",
+  "version": "0.5.0",
   "description": "Express server for Air-1 Dashboard Home Assistant addon",
   "type": "module",
   "main": "server.js",

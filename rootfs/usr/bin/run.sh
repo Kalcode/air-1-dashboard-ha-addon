@@ -2,7 +2,7 @@
 
 # Display startup information
 bashio::log.info "Starting Air-1 Quality Dashboard addon..."
-bashio::log.info "Addon version: 1.2.4"
+bashio::log.info "Addon version: 0.5.0"
 
 # Read configuration with defaults
 SENSOR_PREFIX=$(bashio::config 'sensor_prefix' 'air1')

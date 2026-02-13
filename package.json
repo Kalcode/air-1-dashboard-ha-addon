@@ -1,6 +1,6 @@
 {
   "name": "air1-dashboard-ha-addon",
-  "version": "1.2.4",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Air quality visualization dashboard for Apollo AIR-1 ESPHome sensors - Home Assistant Addon",

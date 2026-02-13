@@ -55,4 +55,4 @@ sort_commits = "oldest"
 [bump]
 features_always_bump_minor = true
 breaking_always_bump_major = true
-initial_tag = "v1.2.4"
+initial_tag = "v0.5.0"
