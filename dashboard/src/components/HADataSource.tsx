@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import { API_BASE_URL } from '../config';
 import type { HAConfig, HAEntity, SensorData, SensorOption } from './types';
 
 interface HADataSourceProps {
@@ -57,7 +58,7 @@ export default function HADataSource(props: HADataSourceProps) {
   // Fetch config from API
   const fetchConfig = async () => {
     try {
-      const response = await fetch('api/config');
+      const response = await fetch(`${API_BASE_URL}api/config`);
       if (!response.ok) {
         throw new Error(`Failed to fetch config: ${response.status}`);
       }
@@ -74,7 +75,7 @@ export default function HADataSource(props: HADataSourceProps) {
   // Fetch available sensors
   const fetchSensors = async () => {
     try {
-      const response = await fetch('api/sensors');
+      const response = await fetch(`${API_BASE_URL}api/sensors`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sensors: ${response.status}`);
       }
@@ -89,7 +90,7 @@ export default function HADataSource(props: HADataSourceProps) {
         setSensors(sensorList);
 
         // Auto-select if only one sensor or if previously selected exists
-        if (sensorList.length === 1) {
+        if (sensorList.length === 1 && sensorList[0]) {
           saveSelectedSensor(sensorList[0].entity_id);
         } else if (selectedSensor()) {
           const exists = sensorList.find((s) => s.entity_id === selectedSensor());
@@ -117,7 +118,7 @@ export default function HADataSource(props: HADataSourceProps) {
     if (!entityId) return;
 
     try {
-      const response = await fetch('api/sensors');
+      const response = await fetch(`${API_BASE_URL}api/sensors`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sensor data: ${response.status}`);
       }
@@ -298,7 +299,7 @@ export default function HADataSource(props: HADataSourceProps) {
                 <For each={sensors()}>
                   {(sensor) => (
                     <option value={sensor.entity_id}>
-                      {sensor.friendly_name || sensor.entity_id}
+                      {sensor.friendly_name?.split(sensors()[0]?.entity_id || '  ')?.[0] || sensor.entity_id}
                       {sensor.room && ` (${sensor.room})`}
                     </option>
                   )}
@@ -310,9 +311,7 @@ export default function HADataSource(props: HADataSourceProps) {
           <Show when={sensors().length === 1 && selectedSensor()}>
             <div style={{ flex: 1 }}>
               <div style={{ color: '#94a3b8', 'font-size': '0.875rem' }}>Connected to:</div>
-              <div style={{ color: '#e2e8f0', 'font-weight': '500' }}>
-                {sensors()[0].friendly_name || sensors()[0].entity_id}
-              </div>
+              <div style={{ color: '#e2e8f0', 'font-weight': '500' }}>Apollo AIR-1 {sensors()[0]?.entity_id}</div>
             </div>
           </Show>
 

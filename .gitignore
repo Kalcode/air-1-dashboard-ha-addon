@@ -24,6 +24,9 @@ dashboard/.astro/
 .env
 .env.local
 .env.*.local
+# But allow .env.development and .env.production (standard Astro env files)
+!dashboard/.env.development
+!dashboard/.env.production
 
 # Temporary files
 *.tmp

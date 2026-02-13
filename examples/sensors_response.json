@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "devices": [
+    {
+      "entity_id": "2c77c8",
+      "device_id": "2c77c8",
+      "device_name": "Apollo AIR-1 2c77c8 ESP Temperature",
+      "friendly_name": "Apollo AIR-1 Apollo AIR-1 2c77c8 ESP Temperature",
+      "room": null,
+      "temperature": 22.44,
+      "rssi": -50,
+      "co2": 712,
+      "pressure": 14.5616850289512,
+      "pm_1um": 16.2000007629395,
+      "pm25": 19,
+      "pm10": 21.6000003814697,
+      "voc": 141,
+      "nox": 1,
+      "humidity": 33.39
+    }
+  ],
+  "count": 1
+}

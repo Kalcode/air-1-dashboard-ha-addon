@@ -5,8 +5,9 @@
   "type": "module",
   "description": "Air quality visualization dashboard for Apollo AIR-1 ESPHome sensors - Home Assistant Addon",
   "workspaces": ["dashboard", "server"],
+  "keywords": ["homeassistant", "air-quality", "dashboard"],
   "scripts": {
-    "dev": "bun --cwd dashboard run dev",
+    "dev": "bun run --cwd server dev:mock & bun run --cwd dashboard dev",
     "build": "bun run build:dashboard",
     "build:dashboard": "bun run --cwd dashboard build",
     "build:server": "echo 'Server has no build step'",
@@ -29,6 +30,7 @@
     "@commitlint/config-conventional": "^20.3.1",
     "@types/bun": "^1.3.5",
     "git-cliff": "^2.11.0",
+    "knip": "^5.83.1",
     "lefthook": "^2.0.13",
     "typescript": "^5.9.3",
     "yaml": "^2.6.1"

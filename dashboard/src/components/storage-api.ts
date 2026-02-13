@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import type { Reading } from './types';
 
 interface StorageReading {
@@ -40,7 +41,7 @@ interface StatsResponse {
   database_path: string;
 }
 
-const API_BASE = 'api/storage';
+const API_BASE = `${API_BASE_URL}api/storage`;
 
 /**
  * Get readings with pagination and filtering

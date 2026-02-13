@@ -194,7 +194,7 @@ export interface HAApiConfig {
 export interface MockSensor {
   entity_id: string;
   friendly_name: string;
-  room: string;
+  room: string | null;
   device_name: string;
 }
 
@@ -215,7 +215,7 @@ export interface MockReading {
   pressure: number | string;
   rssi: number;
   uptime: string;
-  room: string;
+  room: string | null;
 }
 
 /**

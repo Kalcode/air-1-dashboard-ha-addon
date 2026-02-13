@@ -1,0 +1,31 @@
+{
+  "readings": [
+    {
+      "id": "275ab741cff1475da613ee6b28786d1b",
+      "device_id": null,
+      "room": "Apollo AIR-1 2c77c8 ESP Temperature",
+      "timestamp": 1770950928055,
+      "created_at": "2026-02-13 02:48:48",
+      "data": {
+        "co2": "712",
+        "pm25": "19",
+        "pm10": "21.6000003814697",
+        "pm_1um": "16.2000007629395",
+        "pm_4um": "",
+        "humidity": "33.39",
+        "temperature": "22.44",
+        "voc": "141",
+        "vocQuality": "",
+        "nox": "1",
+        "pressure": "14.5616850289512",
+        "rssi": "-50",
+        "uptime": ""
+      }
+    }
+  ],
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "count": 1
+  }
+}

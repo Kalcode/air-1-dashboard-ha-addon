@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "data": {
+    "sensor_prefix": "apollo_air_1",
+    "update_interval": 10,
+    "history_days": 30
+  }
+}

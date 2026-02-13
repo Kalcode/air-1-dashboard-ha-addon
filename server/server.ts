@@ -11,7 +11,6 @@ import { groupEntitiesByDevice } from './config';
 import {
   fetchHistory,
   fetchSensors,
-  fetchState,
   testConnection,
   transformEntityToSensorData,
   transformHistoryData,
@@ -197,45 +196,6 @@ function createApp(): Express {
         success: false,
         error: 'Failed to fetch sensors',
         message: getErrorMessage(error),
-      });
-    }
-  });
-
-  /**
-   * GET /api/sensors/:entity_id
-   * Get current state for a specific sensor entity
-   */
-  app.get('/api/sensors/:entity_id', async (req: Request, res: Response) => {
-    try {
-      const { entity_id } = req.params;
-
-      // Validate entity_id format
-      if (!entity_id || !entity_id.includes('.')) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid entity_id format',
-        });
-      }
-
-      const state = await fetchState(entity_id);
-
-      // Transform to sensor data format
-      const sensorData = transformEntityToSensorData([state], appConfig.sensor_prefix)[0];
-
-      res.json({
-        success: true,
-        data: sensorData,
-      });
-    } catch (error: unknown) {
-      console.error(`[Server] Error in /api/sensors/${req.params.entity_id}:`, error);
-
-      const errorMessage = getErrorMessage(error);
-      const statusCode = errorMessage.includes('not found') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        error: 'Failed to fetch sensor state',
-        message: errorMessage,
       });
     }
   });
