@@ -34,11 +34,6 @@ export interface Reading {
   date: string;
 }
 
-export interface SharePayload {
-  label: string;
-  readings: Reading[];
-}
-
 // Home Assistant integration types
 export interface HAEntity {
   entity_id: string;

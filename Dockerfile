@@ -66,7 +66,7 @@ COPY --from=server-deps /build/node_modules /app/server/node_modules
 
 # Copy server source code
 COPY server/package.json /app/server/
-COPY server/*.js /app/server/
+COPY server/*.ts /app/server/
 
 # Copy startup script
 COPY rootfs /
@@ -75,7 +75,7 @@ COPY rootfs /
 RUN chmod a+x /usr/bin/run.sh
 
 # Verify critical files exist
-RUN test -f /app/server/server.js || (echo "ERROR: server.js not found" && exit 1) && \
+RUN test -f /app/server/server.ts || (echo "ERROR: server.ts not found" && exit 1) && \
     test -d /app/dashboard/dist || (echo "ERROR: dashboard dist not found" && exit 1)
 
 # Expose port (for internal use, ingress handles external)
@@ -83,6 +83,6 @@ EXPOSE 8099
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8099/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8099/health || exit 1
 
 CMD ["/usr/bin/run.sh"]

@@ -7,10 +7,10 @@
  * Usage:
  *   export SUPERVISOR_TOKEN="your_token"
  *   export HA_API_BASE="http://homeassistant.local:8123/api"
- *   node test-example.js
+ *   bun test-example.ts
  */
 
-import { extractSensorType, getDeviceName, groupEntitiesByDevice, parseEntityId } from './config.js';
+import { extractSensorType, getDeviceName, groupEntitiesByDevice, parseEntityId } from './config';
 import {
   fetchHistory,
   fetchSensors,
@@ -18,9 +18,10 @@ import {
   testConnection,
   transformEntityToSensorData,
   transformHistoryData,
-} from './ha-client.js';
+} from './ha-client';
+import type { HAEntity, SensorData } from './types';
 
-async function runTests() {
+async function runTests(): Promise<void> {
   console.log('='.repeat(60));
   console.log('Air-1 Dashboard Server - Test Examples');
   console.log('='.repeat(60));
@@ -32,8 +33,9 @@ async function runTests() {
   try {
     const connected = await testConnection();
     console.log(`Connection status: ${connected ? 'SUCCESS' : 'FAILED'}`);
-  } catch (error) {
-    console.error('Connection test failed:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Connection test failed:', message);
   }
   console.log();
 
@@ -67,8 +69,9 @@ async function runTests() {
         console.log(`  ... and ${sensors.length - 5} more`);
       }
     }
-  } catch (error) {
-    console.error('Failed to fetch sensors:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to fetch sensors:', message);
   }
   console.log();
 
@@ -88,8 +91,9 @@ async function runTests() {
         console.log(JSON.stringify(transformed[0], null, 2));
       }
     }
-  } catch (error) {
-    console.error('Failed to transform sensor data:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to transform sensor data:', message);
   }
   console.log();
 
@@ -108,8 +112,9 @@ async function runTests() {
         console.log(`    ${deviceSensors.length} sensors`);
       }
     }
-  } catch (error) {
-    console.error('Failed to group sensors:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to group sensors:', message);
   }
   console.log();
 
@@ -130,8 +135,9 @@ async function runTests() {
       console.log(`  Last Updated: ${state.last_updated}`);
       console.log(`  Friendly Name: ${state.attributes?.friendly_name || 'N/A'}`);
     }
-  } catch (error) {
-    console.error('Failed to fetch state:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to fetch state:', message);
   }
   console.log();
 
@@ -168,8 +174,9 @@ async function runTests() {
         }
       }
     }
-  } catch (error) {
-    console.error('Failed to fetch history:', error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to fetch history:', message);
   }
   console.log();
 
@@ -196,7 +203,7 @@ async function runTests() {
 }
 
 // Run tests
-runTests().catch((error) => {
+runTests().catch((error: unknown) => {
   console.error('Test runner failed:', error);
   process.exit(1);
 });

@@ -5,12 +5,9 @@
  * for air quality sensor data and serves the dashboard frontend.
  */
 
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import compression from 'compression';
-import express from 'express';
-import { groupEntitiesByDevice } from './config.js';
+import express, { type Request, type Response, type NextFunction, type Express } from 'express';
+import { groupEntitiesByDevice } from './config';
 import {
   fetchHistory,
   fetchSensors,
@@ -18,11 +15,20 @@ import {
   testConnection,
   transformEntityToSensorData,
   transformHistoryData,
-} from './ha-client.js';
+} from './ha-client';
+import storageRouter from './storage-routes';
+import type { AppConfig, Device, SensorData } from './types';
 
-// Get current file's directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Get current file's directory using Bun's built-in
+const __dirname = import.meta.dir;
+
+/**
+ * Safely extract error message from unknown error type
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 // Configuration
 const PORT = process.env.PORT || 8099;
@@ -30,22 +36,22 @@ const CONFIG_PATH = process.env.CONFIG_PATH || '/data/options.json';
 const STATIC_PATH = process.env.STATIC_PATH || '/app/dashboard/dist';
 
 // Default configuration
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: AppConfig = {
   sensor_prefix: 'apollo_air_1',
   update_interval: 10,
   history_days: 30,
 };
 
-let appConfig = { ...DEFAULT_CONFIG };
+let appConfig: AppConfig = { ...DEFAULT_CONFIG };
 
 /**
  * Load configuration from file
  */
-async function loadConfig() {
+async function loadConfig(): Promise<void> {
   try {
     console.log(`[Server] Loading configuration from ${CONFIG_PATH}`);
-    const configData = await readFile(CONFIG_PATH, 'utf8');
-    const parsedConfig = JSON.parse(configData);
+    const configData = await Bun.file(CONFIG_PATH).text();
+    const parsedConfig = JSON.parse(configData) as Partial<AppConfig>;
 
     appConfig = {
       ...DEFAULT_CONFIG,
@@ -53,8 +59,8 @@ async function loadConfig() {
     };
 
     console.log('[Server] Configuration loaded:', appConfig);
-  } catch (error) {
-    console.warn(`[Server] Could not load config file: ${error.message}`);
+  } catch (error: unknown) {
+    console.warn(`[Server] Could not load config file: ${getErrorMessage(error)}`);
     console.log('[Server] Using default configuration:', DEFAULT_CONFIG);
     appConfig = { ...DEFAULT_CONFIG };
   }
@@ -63,7 +69,7 @@ async function loadConfig() {
 /**
  * Create Express application
  */
-function createApp() {
+function createApp(): Express {
   const app = express();
 
   // Middleware
@@ -71,7 +77,7 @@ function createApp() {
   app.use(express.json()); // Parse JSON request bodies
 
   // Request logging middleware
-  app.use((req, res, next) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
@@ -81,7 +87,7 @@ function createApp() {
   });
 
   // Normalize paths - remove leading double slashes from ingress
-  app.use((req, res, next) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('//')) {
       req.url = req.url.replace(/^\/+/, '/');
     }
@@ -89,14 +95,14 @@ function createApp() {
   });
 
   // Log all incoming requests for debugging
-  app.use((req, res, next) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const ingressPath = req.headers['x-ingress-path'];
     console.log(`[Server] ${req.method} ${req.path} | Ingress: ${ingressPath || 'NOT SET'}`);
     next();
   });
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  app.get('/health', (req: Request, res: Response) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -114,18 +120,18 @@ function createApp() {
    * GET /api/config
    * Returns the current addon configuration
    */
-  app.get('/api/config', (req, res) => {
+  app.get('/api/config', (req: Request, res: Response) => {
     try {
       res.json({
         success: true,
         data: appConfig,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[Server] Error in /api/config:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to retrieve configuration',
-        message: error.message,
+        message: getErrorMessage(error),
       });
     }
   });
@@ -134,7 +140,7 @@ function createApp() {
    * GET /api/sensors
    * Discover and return all air quality entities matching the configured prefix
    */
-  app.get('/api/sensors', async (req, res) => {
+  app.get('/api/sensors', async (req: Request, res: Response) => {
     try {
       console.log(`[Server] Fetching sensors with prefix: ${appConfig.sensor_prefix}`);
 
@@ -152,31 +158,31 @@ function createApp() {
       const grouped = groupEntitiesByDevice(entities, appConfig.sensor_prefix);
 
       // Transform each device's entities into a device object
-      const devices = Object.entries(grouped).map(([deviceId, deviceEntities]) => {
+      const devices: Device[] = Object.entries(grouped).map(([deviceId, deviceEntities]) => {
         console.log(`\n[Server] Processing device: ${deviceId}`);
         console.log(
           `[Server] Raw entities for ${deviceId}:`,
           deviceEntities.map((e) => ({
             entity_id: e.entity_id,
             state: e.state,
-            unit: e.unit_of_measurement,
+            unit: e.attributes?.unit_of_measurement,
           })),
         );
 
         // Get device metadata from first entity
         const firstEntity = deviceEntities[0];
-        const deviceName = firstEntity.device_name || deviceId;
+        const deviceName = firstEntity.attributes?.friendly_name || deviceId;
 
         // Transform entities to sensor data array
         const sensorDataArray = transformEntityToSensorData(deviceEntities, appConfig.sensor_prefix);
         console.log(`[Server] Transformed sensor data for ${deviceId}:`, sensorDataArray);
 
         // Combine all sensor readings into a single device object
-        const combinedSensorData = {};
+        const combinedSensorData: Partial<Device> = {};
         for (const sensor of sensorDataArray) {
           if (sensor.sensor_type && sensor.value !== null) {
             // Map sensor_type to the property name expected by the dashboard
-            combinedSensorData[sensor.sensor_type] = sensor.value;
+            (combinedSensorData as Record<string, unknown>)[sensor.sensor_type] = sensor.value;
           }
         }
         console.log(`[Server] Combined sensor data for ${deviceId}:`, combinedSensorData);
@@ -188,7 +194,7 @@ function createApp() {
           friendly_name: `Apollo AIR-1 ${deviceName}`,
           room: null, // Could extract from entity names if needed
           ...combinedSensorData, // Merge all sensor readings (co2, pm25, temperature, etc.)
-        };
+        } as Device;
       });
 
       console.log(`[Server] Discovered ${devices.length} device(s) with ${entities.length} sensor entities`);
@@ -198,12 +204,12 @@ function createApp() {
         devices: devices,
         count: devices.length,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[Server] Error in /api/sensors:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch sensors',
-        message: error.message,
+        message: getErrorMessage(error),
       });
     }
   });
@@ -212,7 +218,7 @@ function createApp() {
    * GET /api/sensors/:entity_id
    * Get current state for a specific sensor entity
    */
-  app.get('/api/sensors/:entity_id', async (req, res) => {
+  app.get('/api/sensors/:entity_id', async (req: Request, res: Response) => {
     try {
       const { entity_id } = req.params;
 
@@ -235,15 +241,16 @@ function createApp() {
         success: true,
         data: sensorData,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[Server] Error in /api/sensors/${req.params.entity_id}:`, error);
 
-      const statusCode = error.message.includes('not found') ? 404 : 500;
+      const errorMessage = getErrorMessage(error);
+      const statusCode = errorMessage.includes('not found') ? 404 : 500;
 
       res.status(statusCode).json({
         success: false,
         error: 'Failed to fetch sensor state',
-        message: error.message,
+        message: errorMessage,
       });
     }
   });
@@ -256,10 +263,10 @@ function createApp() {
    *   - end: ISO timestamp (optional)
    *   - days: Number of days to look back (optional, default: from config)
    */
-  app.get('/api/history/:entity_id', async (req, res) => {
+  app.get('/api/history/:entity_id', async (req: Request, res: Response) => {
     try {
       const { entity_id } = req.params;
-      let { start, end, days } = req.query;
+      const { start, end, days } = req.query;
 
       // Validate entity_id format
       if (!entity_id || !entity_id.includes('.')) {
@@ -270,27 +277,28 @@ function createApp() {
       }
 
       // Calculate time range
+      let startTime: string;
       if (!start && days) {
-        const daysNum = Number.parseInt(days, 10);
+        const daysNum = Number.parseInt(days as string, 10);
         if (Number.isNaN(daysNum) || daysNum < 1) {
           return res.status(400).json({
             success: false,
             error: 'Invalid days parameter',
           });
         }
-        start = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000).toISOString();
+        startTime = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000).toISOString();
       } else if (!start) {
         // Use configured history_days as default
-        start = new Date(Date.now() - appConfig.history_days * 24 * 60 * 60 * 1000).toISOString();
+        startTime = new Date(Date.now() - appConfig.history_days * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        startTime = start as string;
       }
 
-      if (!end) {
-        end = new Date().toISOString();
-      }
+      const endTime = end ? (end as string) : new Date().toISOString();
 
-      console.log(`[Server] Fetching history for ${entity_id} from ${start} to ${end}`);
+      console.log(`[Server] Fetching history for ${entity_id} from ${startTime} to ${endTime}`);
 
-      const historyData = await fetchHistory(entity_id, start, end);
+      const historyData = await fetchHistory(entity_id, startTime, endTime);
 
       // Transform history data to time-series format
       const transformedData = transformHistoryData(historyData);
@@ -299,29 +307,32 @@ function createApp() {
         success: true,
         data: {
           entity_id: entity_id,
-          start: start,
-          end: end,
+          start: startTime,
+          end: endTime,
           count: transformedData.length,
           history: transformedData,
         },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[Server] Error in /api/history/${req.params.entity_id}:`, error);
 
       res.status(500).json({
         success: false,
         error: 'Failed to fetch history data',
-        message: error.message,
+        message: getErrorMessage(error),
       });
     }
   });
+
+  // Mount storage API routes
+  app.use('/api/storage', storageRouter);
 
   // Serve static files from dashboard build directory
   // HA ingress proxy handles path forwarding, so we just serve files as-is
   app.use(express.static(STATIC_PATH));
 
   // SPA fallback - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
+  app.get('*', (req: Request, res: Response) => {
     // Normalize path to handle double slashes from ingress
     const normalizedPath = req.path.replace(/^\/+/, '/');
 
@@ -335,7 +346,7 @@ function createApp() {
 
     // Serve index.html for SPA routing
     // HA ingress proxy handles path forwarding
-    res.sendFile(join(STATIC_PATH, 'index.html'), (err) => {
+    res.sendFile(`${STATIC_PATH}/index.html`, (err) => {
       if (err) {
         console.error('[Server] Error serving index.html:', err);
         res.status(500).json({
@@ -347,7 +358,7 @@ function createApp() {
   });
 
   // Global error handler
-  app.use((err, req, res, next) => {
+  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     console.error('[Server] Unhandled error:', err);
 
     res.status(500).json({
@@ -363,7 +374,7 @@ function createApp() {
 /**
  * Start the server
  */
-async function startServer() {
+async function startServer(): Promise<void> {
   try {
     console.log('[Server] Air-1 Dashboard Server starting...');
 
@@ -409,7 +420,7 @@ async function startServer() {
         process.exit(0);
       });
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Server] Failed to start server:', error);
     process.exit(1);
   }

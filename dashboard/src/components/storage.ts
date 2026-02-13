@@ -1,110 +1,101 @@
+import * as StorageAPI from './storage-api';
 import type { Reading, SensorData } from './types';
 
-const STORAGE_KEY = 'air-quality-history-v2';
+// Save a new reading to the server
+export async function saveReading(data: Partial<SensorData>, room: string): Promise<Reading[]> {
+  const timestamp = Date.now();
 
-export function saveReading(data: Partial<SensorData>, room: string): Reading[] {
-  const reading: Reading = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    data: data as SensorData,
+  await StorageAPI.saveReading({
+    data: data as Record<string, string>,
     room: room || '',
-    timestamp: Date.now(),
-    time: new Date().toLocaleTimeString(),
-    date: new Date().toLocaleDateString(),
-  };
-  let hist: Reading[] = [];
-  try {
-    const h = localStorage.getItem(STORAGE_KEY);
-    if (h) hist = JSON.parse(h);
-  } catch {
-    /* empty */
-  }
-  hist.push(reading);
-  if (hist.length > 50) hist = hist.slice(-50);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(hist));
-  } catch (e) {
-    console.error('Save error:', e);
-  }
-  return hist;
-}
-
-export function loadHistory(): Reading[] {
-  try {
-    const r = localStorage.getItem(STORAGE_KEY);
-    if (r) return JSON.parse(r);
-  } catch {
-    /* empty */
-  }
-  return [];
-}
-
-export function deleteReading(id: string): Reading[] {
-  let hist: Reading[] = [];
-  try {
-    const h = localStorage.getItem(STORAGE_KEY);
-    if (h) hist = JSON.parse(h);
-  } catch {
-    /* empty */
-  }
-  hist = hist.filter((r) => r.id !== id);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(hist));
-  } catch {
-    /* empty */
-  }
-  return hist;
-}
-
-export function clearAllStorage(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* empty */
-  }
-}
-
-export function exportHistory(): void {
-  const hist = loadHistory();
-  const blob = new Blob([JSON.stringify(hist, null, 2)], {
-    type: 'application/json',
+    timestamp,
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `air-quality-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  // Fetch latest readings to return
+  return await loadHistory();
 }
 
-export function importReadingsFromShare(readings: Reading[]): Reading[] {
-  const existing = loadHistory();
-  const existingIds = new Set(existing.map((r) => r.id));
-  const merged = [...existing, ...readings.filter((r) => r.id && r.data && !existingIds.has(r.id))];
-  const trimmed = merged.slice(-50);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-  return trimmed;
+// Load reading history from the server
+export async function loadHistory(): Promise<Reading[]> {
+  try {
+    return await StorageAPI.getReadings({ limit: 50 });
+  } catch (error) {
+    console.error('Failed to load history:', error);
+    return [];
+  }
 }
 
-export function importHistory(file: File): Promise<Reading[]> {
+// Delete a specific reading
+export async function deleteReading(id: string): Promise<Reading[]> {
+  try {
+    await StorageAPI.deleteReading(id);
+    return await loadHistory();
+  } catch (error) {
+    console.error('Failed to delete reading:', error);
+    throw error;
+  }
+}
+
+// Clear all storage
+export async function clearAllStorage(): Promise<void> {
+  try {
+    await StorageAPI.clearAllReadings();
+  } catch (error) {
+    console.error('Failed to clear storage:', error);
+    throw error;
+  }
+}
+
+// Export history as JSON file download
+export async function exportHistory(): Promise<void> {
+  try {
+    const exportData = await StorageAPI.exportReadings();
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `air-quality-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to export history:', error);
+    throw error;
+  }
+}
+
+// Import readings from a JSON file
+export async function importHistory(file: File): Promise<Reading[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const data = JSON.parse(reader.result as string);
-        if (!Array.isArray(data)) {
-          reject(new Error('Invalid format: expected an array'));
+
+        // Handle both old format (array) and new format (export object)
+        const readings: unknown[] = [];
+        if (Array.isArray(data)) {
+          readings.push(...data);
+        } else if (data.readings && Array.isArray(data.readings)) {
+          readings.push(...data.readings);
+        } else {
+          reject(new Error('Invalid format: expected an array or export object'));
           return;
         }
-        // Merge by id — keep existing, add new
-        const existing = loadHistory();
-        const existingIds = new Set(existing.map((r) => r.id));
-        const merged = [...existing, ...data.filter((r: Reading) => r.id && r.data && !existingIds.has(r.id))];
-        // Keep latest 50
-        const trimmed = merged.slice(-50);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-        resolve(trimmed);
-      } catch {
-        reject(new Error('Could not parse JSON file'));
+
+        // Import to server
+        const result = await StorageAPI.importReadings(readings as never[]);
+
+        if (result.errors > 0) {
+          console.warn(`Import completed with ${result.errors} errors`);
+        }
+
+        // Fetch updated history
+        const history = await loadHistory();
+        resolve(history);
+      } catch (error) {
+        reject(new Error('Could not parse or import JSON file'));
       }
     };
     reader.onerror = () => reject(new Error('Failed to read file'));

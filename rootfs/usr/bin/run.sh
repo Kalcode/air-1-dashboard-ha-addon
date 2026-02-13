@@ -24,12 +24,12 @@ bashio::log.info "  Update Interval: ${UPDATE_INTERVAL} seconds"
 bashio::log.info "  History Days: ${HISTORY_DAYS} days"
 
 # Verify server exists
-if [ ! -f "/app/server/server.js" ]; then
-    bashio::log.error "Server not found at /app/server/server.js"
+if [ ! -f "/app/server/server.ts" ]; then
+    bashio::log.error "Server not found at /app/server/server.ts"
     bashio::exit.nok
 fi
 
 # Start the server with Bun
 bashio::log.info "Starting server with Bun..."
 cd /app/server
-exec bun run server.js
+exec bun run server.ts

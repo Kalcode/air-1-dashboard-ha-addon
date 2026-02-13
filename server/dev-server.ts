@@ -6,17 +6,16 @@
  * This server provides mock data for local testing without needing
  * a real Home Assistant instance. Perfect for rapid iteration!
  *
- * Usage: node dev-server.js
+ * Usage: node dev-server.ts
  * Then open: http://localhost:8099
  */
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import compression from 'compression';
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
+import type { Device, MockReading, MockSensor } from './types';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Use Bun's built-in directory reference
+const __dirname = import.meta.dir;
 
 const app = express();
 const PORT = 8099;
@@ -26,13 +25,13 @@ app.use(compression());
 app.use(express.json());
 
 // Request logging
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
 // Mock sensor data - realistic Apollo AIR-1 values
-const MOCK_SENSORS = {
+const MOCK_SENSORS: Record<string, MockSensor> = {
   'sensor.air1_bedroom': {
     entity_id: 'sensor.air1_bedroom',
     friendly_name: 'Bedroom Air Quality',
@@ -54,8 +53,8 @@ const MOCK_SENSORS = {
 };
 
 // Generate realistic sensor readings with some variation
-function generateMockReading(entityId) {
-  const baseValues = {
+function generateMockReading(entityId: string): MockReading {
+  const baseValues: Record<string, { pm25: number; pm10: number; co2: number; temp: number; humidity: number }> = {
     'sensor.air1_bedroom': { pm25: 8, pm10: 12, co2: 650, temp: 21, humidity: 45 },
     'sensor.air1_living_room': { pm25: 15, pm10: 22, co2: 850, temp: 22, humidity: 48 },
     'sensor.air1_office': { pm25: 6, pm10: 10, co2: 580, temp: 20, humidity: 42 },
@@ -64,7 +63,7 @@ function generateMockReading(entityId) {
   const base = baseValues[entityId] || baseValues['sensor.air1_bedroom'];
 
   // Add some random variation (±20%)
-  const vary = (value) => Math.round(value * (0.8 + Math.random() * 0.4));
+  const vary = (value: number): number => Math.round(value * (0.8 + Math.random() * 0.4));
 
   return {
     co2: vary(base.co2),
@@ -87,7 +86,7 @@ function generateMockReading(entityId) {
 // API Endpoints
 
 // GET /api/config
-app.get('/api/config', (req, res) => {
+app.get('/api/config', (req: Request, res: Response) => {
   res.json({
     sensor_prefix: 'air1',
     update_interval: 60,
@@ -96,8 +95,8 @@ app.get('/api/config', (req, res) => {
 });
 
 // GET /api/sensors - Discover available sensors
-app.get('/api/sensors', (req, res) => {
-  const devices = Object.values(MOCK_SENSORS).map((sensor) => ({
+app.get('/api/sensors', (req: Request, res: Response) => {
+  const devices: Partial<Device>[] = Object.values(MOCK_SENSORS).map((sensor) => ({
     entity_id: sensor.entity_id,
     friendly_name: sensor.friendly_name,
     room: sensor.room,
@@ -111,7 +110,7 @@ app.get('/api/sensors', (req, res) => {
 });
 
 // GET /api/sensors/:entity_id - Get current sensor reading
-app.get('/api/sensors/:entity_id', (req, res) => {
+app.get('/api/sensors/:entity_id', (req: Request, res: Response) => {
   const entityId = req.params.entity_id;
 
   if (!MOCK_SENSORS[entityId]) {
@@ -126,9 +125,9 @@ app.get('/api/sensors/:entity_id', (req, res) => {
 });
 
 // GET /api/history/:entity_id - Get historical data
-app.get('/api/history/:entity_id', (req, res) => {
+app.get('/api/history/:entity_id', (req: Request, res: Response) => {
   const entityId = req.params.entity_id;
-  const days = Number.parseInt(req.query.days) || 30;
+  const days = Number.parseInt(req.query.days as string) || 30;
 
   if (!MOCK_SENSORS[entityId]) {
     return res.status(404).json({
@@ -138,7 +137,15 @@ app.get('/api/history/:entity_id', (req, res) => {
   }
 
   // Generate some historical readings
-  const history = [];
+  const history: Array<{
+    id: string;
+    entity_id: string;
+    timestamp: number;
+    time: string;
+    date: string;
+    room: string;
+    data: MockReading;
+  }> = [];
   const now = Date.now();
   const intervalsPerDay = 24; // One reading per hour
   const totalReadings = Math.min(days * intervalsPerDay, 200); // Cap at 200 readings
@@ -162,7 +169,7 @@ app.get('/api/history/:entity_id', (req, res) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     mode: 'development',
@@ -172,12 +179,12 @@ app.get('/health', (req, res) => {
 });
 
 // Serve static dashboard files
-const distPath = path.join(__dirname, '..', 'dashboard', 'dist');
+const distPath = `${__dirname}/../dashboard/dist`;
 app.use(express.static(distPath));
 
 // SPA fallback - serve index.html for all other routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile(`${distPath}/index.html`);
 });
 
 // Start server

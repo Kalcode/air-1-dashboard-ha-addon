@@ -4,14 +4,30 @@
  * Handles all API interactions with Home Assistant Supervisor
  */
 
-import axios from 'axios';
-import { extractSensorType, getDeviceName, parseEntityId } from './config.js';
+import axios, { type AxiosInstance, type AxiosError } from 'axios';
+import { extractSensorType, getDeviceName, parseEntityId } from './config';
+import type { HAEntity, HAHistoryRecord, SensorData, SensorType, TimeSeriesDataPoint } from './types';
+
+/**
+ * Type guard for Axios errors
+ */
+function isAxiosError(error: unknown): error is AxiosError {
+  return axios.isAxiosError(error);
+}
+
+/**
+ * Safely extract error message from unknown error type
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 const HA_API_BASE = process.env.HA_API_BASE || 'http://supervisor/core/api';
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN;
 
 // Create axios instance with default config
-const haClient = axios.create({
+const haClient: AxiosInstance = axios.create({
   baseURL: HA_API_BASE,
   headers: {
     Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
@@ -22,14 +38,14 @@ const haClient = axios.create({
 
 /**
  * Fetch all sensors matching the prefix
- * @param {string} prefix - Sensor prefix (e.g., "air1")
- * @returns {Promise<Array>} - Array of sensor entities
+ * @param prefix - Sensor prefix (e.g., "air1")
+ * @returns Array of sensor entities
  */
-export async function fetchSensors(prefix = 'air1') {
+export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
   try {
     console.log(`[HA Client] Fetching sensors with prefix: ${prefix}`);
 
-    const response = await haClient.get('/states');
+    const response = await haClient.get<HAEntity[]>('/states');
     const states = response.data;
 
     // Filter for sensors matching the prefix
@@ -68,34 +84,34 @@ export async function fetchSensors(prefix = 'air1') {
     console.log(`[HA Client] Found ${matchingSensors.length} matching sensors`);
 
     return matchingSensors;
-  } catch (error) {
-    console.error('[HA Client] Error fetching sensors:', error.message);
+  } catch (error: unknown) {
+    console.error('[HA Client] Error fetching sensors:', getErrorMessage(error));
 
-    if (error.response) {
+    if (isAxiosError(error) && error.response) {
       console.error('[HA Client] Response status:', error.response.status);
       console.error('[HA Client] Response data:', error.response.data);
     }
 
-    throw new Error(`Failed to fetch sensors: ${error.message}`);
+    throw new Error(`Failed to fetch sensors: ${getErrorMessage(error)}`);
   }
 }
 
 /**
  * Fetch current state for a specific entity
- * @param {string} entityId - Entity ID (e.g., "sensor.air1_bedroom_pm25")
- * @returns {Promise<object>} - Entity state object
+ * @param entityId - Entity ID (e.g., "sensor.air1_bedroom_pm25")
+ * @returns Entity state object
  */
-export async function fetchState(entityId) {
+export async function fetchState(entityId: string): Promise<HAEntity> {
   try {
     console.log(`[HA Client] Fetching state for entity: ${entityId}`);
 
-    const response = await haClient.get(`/states/${entityId}`);
+    const response = await haClient.get<HAEntity>(`/states/${entityId}`);
 
     return response.data;
-  } catch (error) {
-    console.error(`[HA Client] Error fetching state for ${entityId}:`, error.message);
+  } catch (error: unknown) {
+    console.error(`[HA Client] Error fetching state for ${entityId}:`, getErrorMessage(error));
 
-    if (error.response) {
+    if (isAxiosError(error) && error.response) {
       if (error.response.status === 404) {
         throw new Error(`Entity not found: ${entityId}`);
       }
@@ -103,18 +119,22 @@ export async function fetchState(entityId) {
       console.error('[HA Client] Response data:', error.response.data);
     }
 
-    throw new Error(`Failed to fetch state: ${error.message}`);
+    throw new Error(`Failed to fetch state: ${getErrorMessage(error)}`);
   }
 }
 
 /**
  * Fetch historical data for an entity
- * @param {string} entityId - Entity ID
- * @param {string} start - ISO timestamp for start (optional)
- * @param {string} end - ISO timestamp for end (optional)
- * @returns {Promise<Array>} - Array of historical state changes
+ * @param entityId - Entity ID
+ * @param start - ISO timestamp for start (optional)
+ * @param end - ISO timestamp for end (optional)
+ * @returns Array of historical state changes
  */
-export async function fetchHistory(entityId, start = null, end = null) {
+export async function fetchHistory(
+  entityId: string,
+  start: string | null = null,
+  end: string | null = null,
+): Promise<HAHistoryRecord[]> {
   try {
     // If no start time provided, default to 24 hours ago
     const startTime = start || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -129,7 +149,7 @@ export async function fetchHistory(entityId, start = null, end = null) {
     });
 
     const url = `/history/period/${startTime}?${params.toString()}`;
-    const response = await haClient.get(url);
+    const response = await haClient.get<HAHistoryRecord[][]>(url);
 
     // History API returns array of arrays (one array per entity)
     const historyData = response.data;
@@ -145,30 +165,30 @@ export async function fetchHistory(entityId, start = null, end = null) {
     console.log(`[HA Client] Retrieved ${entityHistory.length} history records`);
 
     return entityHistory;
-  } catch (error) {
-    console.error(`[HA Client] Error fetching history for ${entityId}:`, error.message);
+  } catch (error: unknown) {
+    console.error(`[HA Client] Error fetching history for ${entityId}:`, getErrorMessage(error));
 
-    if (error.response) {
+    if (isAxiosError(error) && error.response) {
       console.error('[HA Client] Response status:', error.response.status);
       console.error('[HA Client] Response data:', error.response.data);
     }
 
-    throw new Error(`Failed to fetch history: ${error.message}`);
+    throw new Error(`Failed to fetch history: ${getErrorMessage(error)}`);
   }
 }
 
 /**
  * Transform Home Assistant entity to SensorData format
- * @param {object} entity - HA entity object
- * @param {string} prefix - Sensor prefix
- * @returns {object} - Transformed sensor data
+ * @param entity - HA entity object
+ * @param prefix - Sensor prefix
+ * @returns Transformed sensor data
  */
-function transformEntity(entity, prefix = 'air1') {
+function transformEntity(entity: HAEntity, prefix = 'air1'): SensorData {
   const { device, sensor } = parseEntityId(entity.entity_id, prefix);
   const sensorType = extractSensorType(entity.entity_id, entity.attributes, prefix);
 
   // Parse state value
-  let value = null;
+  let value: number | null = null;
   let unit = entity.attributes?.unit_of_measurement || null;
   if (entity.state && entity.state !== 'unknown' && entity.state !== 'unavailable') {
     const parsed = Number.parseFloat(entity.state);
@@ -177,7 +197,8 @@ function transformEntity(entity, prefix = 'air1') {
     }
   }
 
-  // Convert Fahrenheit to Celsius for temperature sensors
+  // CRITICAL: Convert Fahrenheit to Celsius for temperature sensors
+  // This is the primary temperature conversion logic that must be preserved exactly
   if (sensorType === 'temperature' && value !== null && unit === '°F') {
     const beforeConvert = value;
     value = Math.round((((value - 32) * 5) / 9) * 100) / 100;
@@ -185,7 +206,8 @@ function transformEntity(entity, prefix = 'air1') {
     console.log(`[HA Client] Converted temperature from °F to °C: ${beforeConvert}°F → ${value}°C`);
   }
 
-  // Apply calibration offset after unit conversion (offset is in °C)
+  // CRITICAL: Apply calibration offset after unit conversion (offset is in °C)
+  // Example: 75.5°F → 24.17°C, then + 2°C offset = 26.17°C
   if (value !== null && entity._offset != null) {
     const before = value;
     value = Math.round((value + entity._offset) * 100) / 100;
@@ -213,11 +235,11 @@ function transformEntity(entity, prefix = 'air1') {
 
 /**
  * Transform array of HA entities to SensorData format
- * @param {Array} entities - Array of HA entity objects
- * @param {string} prefix - Sensor prefix
- * @returns {Array} - Array of transformed sensor data
+ * @param entities - Array of HA entity objects
+ * @param prefix - Sensor prefix
+ * @returns Array of transformed sensor data
  */
-export function transformEntityToSensorData(entities, prefix = 'air1') {
+export function transformEntityToSensorData(entities: HAEntity[], prefix = 'air1'): SensorData[] {
   if (!Array.isArray(entities)) {
     console.error('[HA Client] transformEntityToSensorData received non-array input');
     return [];
@@ -228,10 +250,10 @@ export function transformEntityToSensorData(entities, prefix = 'air1') {
 
 /**
  * Transform historical data to time-series format
- * @param {Array} historyData - Array of history records from HA
- * @returns {Array} - Array of { timestamp, value } objects
+ * @param historyData - Array of history records from HA
+ * @returns Array of { timestamp, value } objects
  */
-export function transformHistoryData(historyData) {
+export function transformHistoryData(historyData: HAHistoryRecord[]): TimeSeriesDataPoint[] {
   if (!Array.isArray(historyData)) {
     console.error('[HA Client] transformHistoryData received non-array input');
     return [];
@@ -240,7 +262,7 @@ export function transformHistoryData(historyData) {
   return historyData
     .map((record) => {
       // Parse state value
-      let value = null;
+      let value: number | null = null;
       if (record.state && record.state !== 'unknown' && record.state !== 'unavailable') {
         const parsed = Number.parseFloat(record.state);
         if (!Number.isNaN(parsed)) {
@@ -260,36 +282,36 @@ export function transformHistoryData(historyData) {
 
 /**
  * Test connection to Home Assistant API
- * @returns {Promise<boolean>} - True if connection successful
+ * @returns True if connection successful
  */
-export async function testConnection() {
+export async function testConnection(): Promise<boolean> {
   try {
     console.log('[HA Client] Testing connection to Home Assistant API');
 
-    const response = await haClient.get('/');
+    const response = await haClient.get<{ message?: string }>('/');
 
     console.log('[HA Client] Connection successful:', response.data?.message);
     return true;
-  } catch (error) {
-    console.error('[HA Client] Connection test failed:', error.message);
+  } catch (error: unknown) {
+    console.error('[HA Client] Connection test failed:', getErrorMessage(error));
     return false;
   }
 }
 
 /**
  * Get Home Assistant configuration
- * @returns {Promise<object>} - HA config object
+ * @returns HA config object
  */
-export async function fetchConfig() {
+export async function fetchConfig(): Promise<unknown> {
   try {
     console.log('[HA Client] Fetching Home Assistant configuration');
 
     const response = await haClient.get('/config');
 
     return response.data;
-  } catch (error) {
-    console.error('[HA Client] Error fetching config:', error.message);
-    throw new Error(`Failed to fetch HA config: ${error.message}`);
+  } catch (error: unknown) {
+    console.error('[HA Client] Error fetching config:', getErrorMessage(error));
+    throw new Error(`Failed to fetch HA config: ${getErrorMessage(error)}`);
   }
 }
 

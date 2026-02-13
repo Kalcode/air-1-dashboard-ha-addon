@@ -4,9 +4,6 @@ import { ParticleBreakdown, StatusPanel, WHOBars } from './AnalysisComponents';
 import { GaugeBar, VocQualityBadge } from './GaugeComponents';
 import HADataSource from './HADataSource';
 import { HistoryCard } from './HistoryCard';
-import { PreviewBanner } from './PreviewBanner';
-import { ShareButton } from './ShareButton';
-import { decodeSharePayload } from './share-codec';
 import { clearAllStorage, deleteReading, exportHistory, importHistory, loadHistory, saveReading } from './storage';
 import {
   MANUAL_FIELDS,
@@ -32,8 +29,6 @@ const Dashboard: Component = () => {
   const [room, setRoom] = createSignal('');
   const [loading, setLoading] = createSignal(true);
   const [viewingId, setViewingId] = createSignal<string | null>(null);
-  const [previewMode, setPreviewMode] = createSignal(false);
-  const [previewLabel, setPreviewLabel] = createSignal('');
   const [snapshotName, setSnapshotName] = createSignal('');
 
   // Derived signals
@@ -44,39 +39,22 @@ const Dashboard: Component = () => {
   };
   const compData = () => compareReading()?.data ?? null;
 
-  onMount(() => {
-    const hash = window.location.hash;
-    if (hash.startsWith('#share=')) {
-      try {
-        const payload = decodeSharePayload(hash.slice(7));
-        setPreviewMode(true);
-        setPreviewLabel(payload.label);
-        setHistory(payload.readings);
-        if (payload.readings.length > 0) {
-          const latest = payload.readings[payload.readings.length - 1];
-          setData({ ...emptyData, ...latest.data });
-          setRoom(latest.room || '');
-          setTs(latest.time);
-          setViewingId(latest.id);
-          if (payload.readings.length > 1) setCompareId(payload.readings[payload.readings.length - 2].id);
-        }
-        setLoading(false);
-        return;
-      } catch {
-        // Invalid share data — fall through to normal load
-      }
-    }
-
-    const hist = loadHistory();
+  onMount(async () => {
+    const hist = await loadHistory();
     setHistory(hist);
     if (hist.length > 0) {
       const latest = hist[hist.length - 1];
-      setData({ ...emptyData, ...latest.data });
-      setRoom(latest.room || '');
-      setTs(latest.time);
-      setViewingId(latest.id);
-      if (hist.length > 1) setCompareId(hist[hist.length - 2].id);
-      setStatus(`✓ Loaded latest: ${latest.date} ${latest.time}${latest.room ? ` (${latest.room})` : ''}`);
+      if (latest) {
+        setData({ ...emptyData, ...latest.data });
+        setRoom(latest.room || '');
+        setTs(latest.time);
+        setViewingId(latest.id);
+        if (hist.length > 1) {
+          const prev = hist[hist.length - 2];
+          if (prev) setCompareId(prev.id);
+        }
+        setStatus(`✓ Loaded latest: ${latest.date} ${latest.time}${latest.room ? ` (${latest.room})` : ''}`);
+      }
     }
     setLoading(false);
   });
@@ -101,41 +79,60 @@ const Dashboard: Component = () => {
     setTs(entry.time);
     setViewingId(entry.id);
     const idx = history().findIndex((h) => h.id === entry.id);
-    setCompareId(idx > 0 ? history()[idx - 1].id : null);
+    if (idx > 0) {
+      const prev = history()[idx - 1];
+      if (prev) setCompareId(prev.id);
+    } else {
+      setCompareId(null);
+    }
     setStatus(`✓ Viewing: ${entry.date} ${entry.time}${entry.room ? ` (${entry.room})` : ''}`);
   };
 
-  const handleDelete = (id: string) => {
-    const hist = deleteReading(id);
-    setHistory(hist);
-    if (id === viewingId() && hist.length > 0) {
-      const latest = hist[hist.length - 1];
-      setData({ ...emptyData, ...latest.data });
-      setViewingId(latest.id);
-      setTs(latest.time);
-      setRoom(latest.room || '');
-    } else if (hist.length === 0) {
-      setData({ ...emptyData });
-      setViewingId(null);
-      setTs(null);
+  const handleDelete = async (id: string) => {
+    try {
+      const hist = await deleteReading(id);
+      setHistory(hist);
+      if (id === viewingId() && hist.length > 0) {
+        const latest = hist[hist.length - 1];
+        if (latest) {
+          setData({ ...emptyData, ...latest.data });
+          setViewingId(latest.id);
+          setTs(latest.time);
+          setRoom(latest.room || '');
+        }
+      } else if (hist.length === 0) {
+        setData({ ...emptyData });
+        setViewingId(null);
+        setTs(null);
+      }
+      if (id === compareId()) setCompareId(null);
+    } catch (e) {
+      setStatus(`✕ ${e instanceof Error ? e.message : 'Delete failed'}`);
     }
-    if (id === compareId()) setCompareId(null);
   };
 
-  const handleClearAll = () => {
-    clearAllStorage();
-    setData({ ...emptyData });
-    setHistory([]);
-    setTs(null);
-    setRoom('');
-    setStatus('Cleared all data.');
-    setCompareId(null);
-    setViewingId(null);
+  const handleClearAll = async () => {
+    try {
+      await clearAllStorage();
+      setData({ ...emptyData });
+      setHistory([]);
+      setTs(null);
+      setRoom('');
+      setStatus('Cleared all data.');
+      setCompareId(null);
+      setViewingId(null);
+    } catch (e) {
+      setStatus(`✕ ${e instanceof Error ? e.message : 'Clear failed'}`);
+    }
   };
 
-  const handleExport = () => {
-    exportHistory();
-    setStatus(`✓ Exported ${history().length} readings`);
+  const handleExport = async () => {
+    try {
+      await exportHistory();
+      setStatus(`✓ Exported ${history().length} readings`);
+    } catch (e) {
+      setStatus(`✕ ${e instanceof Error ? e.message : 'Export failed'}`);
+    }
   };
 
   let fileInput!: HTMLInputElement;
@@ -146,11 +143,16 @@ const Dashboard: Component = () => {
       setHistory(hist);
       if (hist.length > 0) {
         const latest = hist[hist.length - 1];
-        setData({ ...emptyData, ...latest.data });
-        setRoom(latest.room || '');
-        setTs(latest.time);
-        setViewingId(latest.id);
-        if (hist.length > 1) setCompareId(hist[hist.length - 2].id);
+        if (latest) {
+          setData({ ...emptyData, ...latest.data });
+          setRoom(latest.room || '');
+          setTs(latest.time);
+          setViewingId(latest.id);
+          if (hist.length > 1) {
+            const prev = hist[hist.length - 2];
+            if (prev) setCompareId(prev.id);
+          }
+        }
       }
       setStatus(`✓ Imported! ${hist.length} total readings`);
     } catch (e) {
@@ -158,19 +160,28 @@ const Dashboard: Component = () => {
     }
   };
 
-  const handleTakeSnapshot = () => {
+  const handleTakeSnapshot = async () => {
     if (!hasData()) {
       setStatus('✕ No sensor data available to snapshot');
       return;
     }
-    const name = snapshotName().trim() || room() || 'Snapshot';
-    const hist = saveReading(data(), name);
-    const newSnapshot = hist[hist.length - 1];
-    setHistory(hist);
-    setViewingId(newSnapshot.id);
-    if (hist.length > 1) setCompareId(hist[hist.length - 2].id);
-    setStatus(`✓ Snapshot saved: ${name}`);
-    setSnapshotName(''); // Clear input after saving
+    try {
+      const name = snapshotName().trim() || room() || 'Snapshot';
+      const hist = await saveReading(data(), name);
+      const newSnapshot = hist[hist.length - 1];
+      if (newSnapshot) {
+        setHistory(hist);
+        setViewingId(newSnapshot.id);
+        if (hist.length > 1) {
+          const prev = hist[hist.length - 2];
+          if (prev) setCompareId(prev.id);
+        }
+        setStatus(`✓ Snapshot saved: ${name}`);
+        setSnapshotName(''); // Clear input after saving
+      }
+    } catch (e) {
+      setStatus(`✕ ${e instanceof Error ? e.message : 'Save failed'}`);
+    }
   };
 
   return (
@@ -201,11 +212,6 @@ const Dashboard: Component = () => {
           'font-family': "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         }}
       >
-        {/* Preview Banner */}
-        <Show when={previewMode()}>
-          <PreviewBanner label={previewLabel()} count={history().length} readings={history()} />
-        </Show>
-
         {/* Header */}
         <div style={{ 'text-align': 'center', 'margin-bottom': '20px' }}>
           <div
@@ -330,159 +336,156 @@ const Dashboard: Component = () => {
           </div>
         </div>
 
-        {/* Input — hidden in preview mode */}
-        <Show when={!previewMode()}>
-          {/* Home Assistant Data Source */}
-          <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
-            <HADataSource onDataUpdate={handleDataUpdate} onError={handleError} />
-            <Show when={status()}>
-              <div
-                style={{
-                  'margin-top': '8px',
-                  'font-size': '11px',
-                  ...mono,
-                  color: status().startsWith('✓') ? '#22c55e' : status().startsWith('✕') ? '#ef4444' : '#94a3b8',
-                }}
-              >
-                {status()}
-              </div>
-            </Show>
-          </div>
-
-          {/* Take Snapshot */}
-          <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
-            <div style={{ 'margin-bottom': '8px' }}>
-              <span style={labelStyle}>Take Snapshot</span>
+        {/* Home Assistant Data Source */}
+        <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
+          <HADataSource onDataUpdate={handleDataUpdate} onError={handleError} />
+          <Show when={status()}>
+            <div
+              style={{
+                'margin-top': '8px',
+                'font-size': '11px',
+                ...mono,
+                color: status().startsWith('✓') ? '#22c55e' : status().startsWith('✕') ? '#ef4444' : '#94a3b8',
+              }}
+            >
+              {status()}
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Snapshot name (optional)"
-                value={snapshotName()}
-                onInput={(e) => setSnapshotName(e.currentTarget.value)}
-                style={{ ...inputStyle, flex: 1 }}
-              />
+          </Show>
+        </div>
+
+        {/* Take Snapshot */}
+        <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
+          <div style={{ 'margin-bottom': '8px' }}>
+            <span style={labelStyle}>Take Snapshot</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="Snapshot name (optional)"
+              value={snapshotName()}
+              onInput={(e) => setSnapshotName(e.currentTarget.value)}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={handleTakeSnapshot}
+              disabled={!hasData()}
+              style={{
+                padding: '8px 16px',
+                background: hasData() ? '#3b82f6' : '#1e293b',
+                border: '1px solid',
+                'border-color': hasData() ? '#2563eb' : '#334155',
+                'border-radius': '6px',
+                color: hasData() ? '#f1f5f9' : '#475569',
+                'font-size': '12px',
+                ...mono,
+                cursor: hasData() ? 'pointer' : 'not-allowed',
+                'white-space': 'nowrap',
+              }}
+            >
+              Save
+            </button>
+          </div>
+          <div
+            style={{
+              'margin-top': '6px',
+              'font-size': '10px',
+              color: '#64748b',
+              ...mono,
+            }}
+          >
+            Capture current sensor readings with a custom name
+          </div>
+        </div>
+
+        {/* Manual Entry */}
+        <Show when={showManual()}>
+          <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                'justify-content': 'space-between',
+                'align-items': 'center',
+                'margin-bottom': '8px',
+              }}
+            >
+              <span style={labelStyle}>Manual Entry (Backup)</span>
               <button
                 type="button"
-                onClick={handleTakeSnapshot}
-                disabled={!hasData()}
+                onClick={() => setShowManual(false)}
                 style={{
-                  padding: '8px 16px',
-                  background: hasData() ? '#3b82f6' : '#1e293b',
-                  border: '1px solid',
-                  'border-color': hasData() ? '#2563eb' : '#334155',
-                  'border-radius': '6px',
-                  color: hasData() ? '#f1f5f9' : '#475569',
-                  'font-size': '12px',
-                  ...mono,
-                  cursor: hasData() ? 'pointer' : 'not-allowed',
-                  'white-space': 'nowrap',
+                  background: 'none',
+                  border: 'none',
+                  color: '#475569',
+                  'font-size': '14px',
+                  cursor: 'pointer',
+                  padding: '0 4px',
                 }}
               >
-                Save
+                ✕
               </button>
             </div>
             <div
               style={{
-                'margin-top': '6px',
-                'font-size': '10px',
-                color: '#64748b',
-                ...mono,
+                display: 'grid',
+                'grid-template-columns': '1fr 1fr',
+                gap: '8px',
               }}
             >
-              Capture current sensor readings with a custom name
+              <For each={MANUAL_FIELDS}>
+                {([key, label]) => (
+                  <label style={{ display: 'block' }}>
+                    <span
+                      style={{
+                        display: 'block',
+                        'font-size': '10px',
+                        color: '#64748b',
+                        ...mono,
+                        'margin-bottom': '3px',
+                      }}
+                    >
+                      {label}
+                    </span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={data()[key]}
+                      onInput={(e) => {
+                        setData((p) => ({
+                          ...p,
+                          [key]: e.currentTarget.value,
+                        }));
+                        if (!ts()) setTs(new Date().toLocaleTimeString());
+                      }}
+                      style={inputStyle}
+                    />
+                  </label>
+                )}
+              </For>
             </div>
           </div>
+        </Show>
 
-          {/* Manual Entry */}
-          <Show when={showManual()}>
-            <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  'justify-content': 'space-between',
-                  'align-items': 'center',
-                  'margin-bottom': '8px',
-                }}
-              >
-                <span style={labelStyle}>Manual Entry (Backup)</span>
-                <button
-                  type="button"
-                  onClick={() => setShowManual(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#475569',
-                    'font-size': '14px',
-                    cursor: 'pointer',
-                    padding: '0 4px',
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-              <div
-                style={{
-                  display: 'grid',
-                  'grid-template-columns': '1fr 1fr',
-                  gap: '8px',
-                }}
-              >
-                <For each={MANUAL_FIELDS}>
-                  {([key, label]) => (
-                    <label style={{ display: 'block' }}>
-                      <span
-                        style={{
-                          display: 'block',
-                          'font-size': '10px',
-                          color: '#64748b',
-                          ...mono,
-                          'margin-bottom': '3px',
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <input
-                        type="number"
-                        step="any"
-                        value={data()[key]}
-                        onInput={(e) => {
-                          setData((p) => ({
-                            ...p,
-                            [key]: e.currentTarget.value,
-                          }));
-                          if (!ts()) setTs(new Date().toLocaleTimeString());
-                        }}
-                        style={inputStyle}
-                      />
-                    </label>
-                  )}
-                </For>
-              </div>
-            </div>
-          </Show>
-
-          {/* Manual Entry Toggle */}
-          <Show when={!showManual()}>
-            <button
-              type="button"
-              onClick={() => setShowManual(true)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                'border-radius': '6px',
-                color: '#94a3b8',
-                'font-size': '12px',
-                ...mono,
-                cursor: 'pointer',
-                'margin-bottom': '12px',
-              }}
-            >
-              Manual Entry (Backup)
-            </button>
-          </Show>
+        {/* Manual Entry Toggle */}
+        <Show when={!showManual()}>
+          <button
+            type="button"
+            onClick={() => setShowManual(true)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: '#1e293b',
+              border: '1px solid #334155',
+              'border-radius': '6px',
+              color: '#94a3b8',
+              'font-size': '12px',
+              ...mono,
+              cursor: 'pointer',
+              'margin-bottom': '12px',
+            }}
+          >
+            Manual Entry (Backup)
+          </button>
         </Show>
 
         {/* Compare Indicator */}
@@ -515,7 +518,7 @@ const Dashboard: Component = () => {
                 {compareReading()?.room || compareReading()?.date} · {compareReading()?.time}
               </span>
               <span style={{ 'font-size': '9px', color: '#475569', ...mono }}>
-                {timeAgo(compareReading()?.timestamp)}
+                {compareReading()?.timestamp ? timeAgo(compareReading()!.timestamp) : ''}
               </span>
             </div>
             <button
@@ -634,8 +637,8 @@ const Dashboard: Component = () => {
           </Show>
         </Show>
 
-        {/* Empty State — only in normal mode */}
-        <Show when={!previewMode() && !hasData() && history().length === 0}>
+        {/* Empty State */}
+        <Show when={!hasData() && history().length === 0}>
           <div
             style={{
               'text-align': 'center',
@@ -667,20 +670,18 @@ const Dashboard: Component = () => {
           </div>
         </Show>
 
-        {/* Hidden file input for import — only in normal mode */}
-        <Show when={!previewMode()}>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.currentTarget.files?.[0];
-              if (file) handleImport(file);
-              e.currentTarget.value = '';
-            }}
-          />
-        </Show>
+        {/* Hidden file input for import */}
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            if (file) handleImport(file);
+            e.currentTarget.value = '';
+          }}
+        />
 
         {/* History */}
         <div style={{ 'margin-top': '20px' }}>
@@ -693,14 +694,27 @@ const Dashboard: Component = () => {
             }}
           >
             <span style={labelStyle}>History ({history().length})</span>
-            <Show when={!previewMode()}>
-              <div style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
-                <Show when={history().length > 0}>
-                  <ShareButton readings={history()} label={room() || 'Shared'} />
-                </Show>
+            <div style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+              <button
+                type="button"
+                onClick={() => fileInput.click()}
+                style={{
+                  background: 'none',
+                  border: '1px solid #1e293b',
+                  'border-radius': '4px',
+                  color: '#94a3b8',
+                  'font-size': '10px',
+                  ...mono,
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                Import
+              </button>
+              <Show when={history().length > 0}>
                 <button
                   type="button"
-                  onClick={() => fileInput.click()}
+                  onClick={handleExport}
                   style={{
                     background: 'none',
                     border: '1px solid #1e293b',
@@ -712,44 +726,26 @@ const Dashboard: Component = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  Import
+                  Export
                 </button>
-                <Show when={history().length > 0}>
-                  <button
-                    type="button"
-                    onClick={handleExport}
-                    style={{
-                      background: 'none',
-                      border: '1px solid #1e293b',
-                      'border-radius': '4px',
-                      color: '#94a3b8',
-                      'font-size': '10px',
-                      ...mono,
-                      padding: '3px 8px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Export
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearAll}
-                    style={{
-                      background: 'none',
-                      border: '1px solid #331111',
-                      'border-radius': '4px',
-                      color: '#7f1d1d',
-                      'font-size': '10px',
-                      ...mono,
-                      padding: '3px 8px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Clear All
-                  </button>
-                </Show>
-              </div>
-            </Show>
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #331111',
+                    'border-radius': '4px',
+                    color: '#7f1d1d',
+                    'font-size': '10px',
+                    ...mono,
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear All
+                </button>
+              </Show>
+            </div>
           </div>
           <Show when={history().length > 0}>
             <div
@@ -769,7 +765,7 @@ const Dashboard: Component = () => {
                     onCompare={() => setCompareId(entry.id)}
                     onClearCompare={() => setCompareId(null)}
                     onDelete={() => handleDelete(entry.id)}
-                    readOnly={previewMode()}
+                    readOnly={false}
                   />
                 )}
               </For>
