@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
+name: Apollo AIR 1 Dashboard
+url: 'https://github.com/Kalcode/air-1-dashboard-ha-addon'
+maintainer: David Clausen <davidclausen2051@gmail.com>
