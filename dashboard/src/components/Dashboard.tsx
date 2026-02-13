@@ -338,7 +338,7 @@ const Dashboard: Component = () => {
 
         {/* Home Assistant Data Source */}
         <div style={{ ...cardStyle, padding: '14px', 'margin-bottom': '12px' }}>
-          <HADataSource onDataUpdate={handleDataUpdate} onError={handleError} />
+          <HADataSource onDataUpdate={handleDataUpdate} onError={handleError} pausePolling={viewingId() !== null} />
           <Show when={status()}>
             <div
               style={{

@@ -4,6 +4,7 @@ import type { HAConfig, HAEntity, SensorData, SensorOption } from './types';
 interface HADataSourceProps {
   onDataUpdate: (data: Partial<SensorData>, room: string) => void;
   onError: (error: string) => void;
+  pausePolling?: boolean; // Pause auto-updates when viewing history
 }
 
 interface DeviceResponse {
@@ -178,6 +179,11 @@ export default function HADataSource(props: HADataSourceProps) {
     const entityId = selectedSensor();
     const cfg = config();
     if (!entityId || !cfg) return;
+
+    // Skip polling if paused (e.g., when viewing history)
+    if (props.pausePolling) {
+      return;
+    }
 
     // Fetch immediately
     fetchData();
