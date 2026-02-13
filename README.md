@@ -2,7 +2,7 @@
 
 Beautiful air quality visualization dashboard for Apollo AIR-1 ESPHome sensors, integrated directly into Home Assistant.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-0.5.0-blue)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2023.1+-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -42,7 +42,7 @@ This addon works with Apollo AIR-1 air quality sensors running ESPHome. It monit
 2. Build the dashboard:
    ```bash
    cd air1_dashboard
-   ./build.sh
+   ./scripts/build.sh
    ```
 
 3. Refresh the add-on store in Home Assistant
@@ -152,27 +152,47 @@ The addon will automatically discover entities matching `sensor.{prefix}_*`.
 - Try accessing directly: `http://homeassistant.local:8099`
 
 ### Build errors
-- Ensure Node.js 18+ is installed
-- Run `./build.sh` to see detailed error messages
+- Ensure Bun >= 1.0.0 is installed ([install Bun](https://bun.sh))
+- Run `./scripts/build.sh` to see detailed error messages
 - Check dashboard/package.json dependencies
 
 ## Development
 
+See [DEVELOPMENT.md](DEVELOPMENT.md) for comprehensive development documentation and [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
+### Quick Start
+
+```bash
+# Install dependencies (requires Bun >= 1.0.0)
+bun install
+
+# Start development (mock server + dashboard with hot reload)
+bun dev
+# → Dashboard: http://localhost:4321 (auto-opens)
+# → Mock API: http://localhost:8099
+
+# Build for production
+bun run build
+
+# Run type checking
+bun run typecheck
+
+# Run linter
+bun run lint
+```
+
 ### Building Locally
 
 ```bash
-# Install dependencies and build dashboard
-./build.sh
+# Clean and build dashboard
+./scripts/clean.sh
+./scripts/build.sh
 
-# Build Docker image
-docker build -t air1-dashboard-addon .
+# Test Docker build
+./scripts/test-docker.sh
 
-# Test server locally (requires HA API access)
-cd server
-npm install
-export SUPERVISOR_TOKEN="your_token"
-export HA_API_BASE="http://homeassistant.local:8123/api"
-node server.js
+# Deploy to HA via SMB (requires mounted addons share)
+./scripts/deploy-local.sh
 ```
 
 ### Project Structure
@@ -180,21 +200,32 @@ node server.js
 ```
 air1-dashboard-ha-addon/
 ├── config.yaml              # HA addon manifest
-├── Dockerfile               # Container build
-├── build.sh                 # Build automation
+├── Dockerfile               # Multi-stage production build
 ├── README.md                # This file
+├── DEVELOPMENT.md           # Development guide
+├── CONTRIBUTING.md          # Contribution guidelines
 ├── CHANGELOG.md             # Version history
+├── scripts/                 # Build and deployment scripts
+│   ├── build.sh             # Build dashboard
+│   ├── clean.sh             # Clean artifacts
+│   ├── deploy-local.sh      # Deploy to HA via SMB
+│   └── test-docker.sh       # Test Docker build
 ├── rootfs/
 │   └── usr/bin/run.sh       # Startup script
-├── server/                  # Node.js backend
-│   ├── server.js            # Express API server
-│   ├── ha-client.js         # HA API client
-│   ├── config.js            # Entity mapping
+├── server/                  # TypeScript backend (Express)
+│   ├── server.ts            # Main API server
+│   ├── dev-server.ts        # Mock server for development
+│   ├── ha-client.ts         # Home Assistant API client
+│   ├── storage-routes.ts    # Persistent storage API
+│   ├── db.ts                # SQLite database wrapper
+│   ├── config.ts            # Entity mapping utilities
+│   ├── types.ts             # Shared TypeScript types
 │   └── package.json
-└── dashboard/               # SolidJS frontend
+└── dashboard/               # Frontend (Astro + SolidJS)
     ├── src/
-    │   ├── components/      # UI components
-    │   └── pages/
+    │   ├── components/      # UI components (TSX)
+    │   ├── pages/           # Astro pages
+    │   └── config.ts        # API base URL config
     ├── dist/                # Built static files
     └── package.json
 ```
@@ -203,10 +234,19 @@ air1-dashboard-ha-addon/
 
 The addon server provides these API endpoints:
 
+**Sensor Data:**
 - `GET /api/config` - Get addon configuration
 - `GET /api/sensors` - Discover available air quality sensors
-- `GET /api/sensors/:entity_id` - Get current sensor state
-- `GET /api/history/:entity_id?days=30` - Fetch historical data
+- `GET /api/history/:device_id?days=30` - Fetch historical data
+
+**Storage (Persistent Snapshots):**
+- `GET /api/storage/readings` - Get all saved readings (with pagination)
+- `POST /api/storage/readings` - Save a new reading
+- `DELETE /api/storage/readings/:id` - Delete a reading
+- `DELETE /api/storage/readings` - Clear all readings
+- `GET /api/storage/export` - Export all readings as JSON
+- `POST /api/storage/import` - Import readings from JSON
+- `GET /api/storage/stats` - Get storage statistics
 
 ## License
 

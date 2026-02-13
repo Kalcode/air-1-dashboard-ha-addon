@@ -1,193 +1,407 @@
 # Development Guide
 
-Quick reference for developing and testing the Air-1 Dashboard addon locally.
+Complete guide for developing and testing the Air-1 Dashboard addon locally.
 
-## 🛠️ Development Workflow
+## 🚀 Quick Start
+
+```bash
+# Install dependencies
+bun install
+
+# Start development (mock server + dashboard with hot reload)
+bun dev
+
+# Open dashboard in browser
+# → http://localhost:4321 (auto-opens)
+# → Mock API at http://localhost:8099
+```
+
+## 🛠️ Development Environment
+
+### Prerequisites
+- **Bun** >= 1.0.0 ([install](https://bun.sh))
+- **Git**
+- **Docker** (for testing container builds)
+- **Home Assistant** instance (optional, for integration testing)
+
+### First-Time Setup
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/air1-dashboard-ha-addon.git
+cd air1-dashboard-ha-addon
+
+# Install all workspace dependencies
+bun install
+
+# Start development servers
+bun dev
+```
+
+## 💻 Development Workflow
 
 ### Local Development with Mock Data
 
+The `bun dev` command starts two servers concurrently:
+
+1. **Mock API Server** (port 8099)
+   - 3 mock Apollo AIR-1 sensors with realistic data
+   - Full REST API endpoints (`/api/config`, `/api/sensors`, `/api/history`)
+   - Mock storage API with in-memory data
+   - CORS enabled for cross-origin requests
+
+2. **Dashboard Dev Server** (port 4321)
+   - Astro + SolidJS with hot module reload
+   - Automatically connects to mock API
+   - Opens in browser automatically
+
 ```bash
-# Build the dashboard
-./build.sh
+# Start both servers
+bun dev
 
-# Start dev server with fake sensors
-./dev-preview.sh
+# Build dashboard only
+bun run build:dashboard
 
-# Open in browser
-open http://localhost:8099
+# Check for type errors
+bun run typecheck
+
+# Run linter
+bun run lint
+
+# Auto-fix lint issues
+bun run lint:fix
 ```
 
-The dev server provides 3 mock sensors (Bedroom, Living Room, Office) with realistic air quality data.
+### Project Structure
+
+```
+air1-dashboard-ha-addon/
+├── dashboard/              # Frontend (Astro + SolidJS)
+│   ├── src/
+│   │   ├── components/     # UI components (TSX)
+│   │   ├── pages/          # Astro pages
+│   │   ├── config.ts       # API base URL config
+│   │   └── styles/         # CSS styles
+│   ├── .env.development    # Dev environment (points to mock server)
+│   ├── .env.production     # Production (relative API paths)
+│   └── astro.config.mjs    # Astro configuration
+│
+├── server/                 # Backend (TypeScript + Express)
+│   ├── server.ts           # Production server
+│   ├── dev-server.ts       # Mock server for development
+│   ├── ha-client.ts        # Home Assistant API client
+│   ├── storage-routes.ts   # Storage API endpoints
+│   ├── db.ts               # SQLite database wrapper
+│   ├── config.ts           # Entity mapping utilities
+│   └── types.ts            # Shared TypeScript types
+│
+├── examples/               # Example API responses (for reference)
+│   ├── config_response.json
+│   ├── sensors_response.json
+│   └── readings_response.json
+│
+├── scripts/                # Build and deployment scripts
+│   ├── build.sh            # Build dashboard
+│   ├── clean.sh            # Clean artifacts
+│   ├── deploy-local.sh     # Deploy to HA via SMB
+│   ├── test-docker.sh      # Test Docker build
+│   ├── validate.sh         # Validate server code
+│   └── *.ts                # Release and version scripts
+│
+├── .github/                # GitHub templates
+│   └── pull_request_template.md
+│
+├── Dockerfile              # Multi-stage production build
+├── config.yaml             # HA addon manifest
+├── rootfs/                 # HA addon runtime files
+│   └── usr/bin/run.sh      # Startup script
+│
+├── CONTRIBUTING.md         # Contribution guidelines
+└── DEVELOPMENT.md          # This file
+```
 
 ### Making Changes
 
-1. **Edit dashboard code**: `dashboard/src/components/`
-2. **Rebuild**: `./build.sh`
-3. **Restart dev server**: Stop (Ctrl+C) and run `./dev-preview.sh`
-4. **Refresh browser** to see changes
+**Dashboard (Frontend)**:
+1. Edit files in `dashboard/src/components/`
+2. Changes hot-reload automatically
+3. TypeScript errors show in terminal and browser
 
-## 🧪 Testing in Home Assistant
+**Server (Backend)**:
+1. Edit files in `server/`
+2. Restart dev server: Stop (Ctrl+C) and `bun dev`
+3. Or use watch mode: `bun run --cwd server dev` (watches server.ts only)
 
-### Option 1: SMB Deploy (Fastest for iteration)
+**Mock Server**:
+1. Edit `server/dev-server.ts`
+2. Restart: Stop (Ctrl+C) and `bun dev`
+3. Mock data resets on restart
+
+## 🧪 Testing
+
+### Local Testing (No HA Required)
+
+```bash
+# Start mock environment
+bun dev
+
+# Test in browser at http://localhost:4321
+# - Check sensor data loads
+# - Test storage (save/load snapshots)
+# - View historical data charts
+# - Test mobile responsive layout
+```
+
+### Docker Build Test
+
+```bash
+# Test the production Docker build
+./scripts/test-docker.sh
+
+# Or manually
+docker build -t air1-test .
+docker run -it --rm -p 8099:8099 air1-test
+```
+
+### Testing in Home Assistant
+
+#### Option 1: SMB Deploy (Fastest)
 
 **Prerequisites**:
-- SMB share mounted at `/Volumes/addons`
-- To mount: Open `smb://homeassistant/addons` in Finder (Cmd+K)
+- SMB share mounted: Open `smb://homeassistant/addons` in Finder (macOS) or file explorer
+- Path should be `/Volumes/addons` (macOS) or network drive (Windows/Linux)
 
 **Deploy**:
 ```bash
 # Clean and deploy to HA
-./deploy-local.sh
+./scripts/deploy-local.sh
 
-# Then in HA:
-# Settings → Add-ons → ⋮ → Check for updates → Install/Rebuild
+# Then in Home Assistant:
+# Settings → Add-ons → ⋮ → Check for updates → Rebuild
 ```
 
-**What this does**:
-1. Cleans all build artifacts (node_modules, dist, etc.)
-2. Copies clean source to `/Volumes/addons/air1_dashboard/`
-3. HA Supervisor builds the Docker image with multi-stage build
+**What happens**:
+1. Runs `./scripts/clean.sh` to remove build artifacts
+2. Copies source to `/Volumes/addons/air1_dashboard/`
+3. HA Supervisor builds Docker image
+4. Install or rebuild addon in HA UI
 
-### Option 2: Manual Copy
+#### Option 2: Manual Copy
 
 ```bash
-# Clean first
-./clean.sh
+# Clean build artifacts
+./scripts/clean.sh
 
 # Copy to your HA addons directory
 cp -r . /path/to/homeassistant/addons/air1_dashboard/
 
-# Refresh in HA
+# Refresh in HA: Settings → Add-ons → ⋮ → Check for updates
 ```
 
-### Option 3: Docker Build Locally
+#### Option 3: Git Clone in HA
 
 ```bash
-# Test the multi-stage build
-docker build -t air1-dashboard-test .
+# SSH into Home Assistant
+ssh root@homeassistant.local
 
-# Run container (limited - needs HA API)
-docker run -it --rm -p 8099:8099 \
-  -e SUPERVISOR_TOKEN="test" \
-  -e SENSOR_PREFIX="air1" \
-  air1-dashboard-test
+# Clone to addons directory
+cd /addons
+git clone https://github.com/yourusername/air1-dashboard-ha-addon.git air1_dashboard
+
+# Refresh in HA UI
 ```
 
 ## 🧹 Cleaning
 
 ```bash
-# Remove all build artifacts
-./clean.sh
+# Remove all build artifacts and dependencies
+./scripts/clean.sh
 ```
 
 **What gets cleaned**:
 - `dashboard/dist/` - Built static files
-- `dashboard/node_modules/` - Dashboard dependencies
-- `server/node_modules/` - Server dependencies
+- `dashboard/node_modules/` - Dependencies
 - `dashboard/.astro/` - Astro cache
+- `server/node_modules/` - Dependencies
 - Logs and temp files
 
 **When to clean**:
-- Before deploying to HA (ensures fresh Docker build)
-- Before committing (keeps repo small)
-- When switching branches
-- After dependency changes
+- ✅ Before deploying to HA (ensures fresh Docker build)
+- ✅ Before committing (keeps repo small)
+- ✅ When switching branches
+- ✅ After dependency changes
+- ✅ When troubleshooting build issues
 
 ## 📦 Scripts Reference
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `build.sh` | Build dashboard locally | `./build.sh` |
-| `dev-preview.sh` | Run dev server with mock data | `./dev-preview.sh` |
-| `clean.sh` | Remove all build artifacts | `./clean.sh` |
-| `deploy-local.sh` | Clean + deploy to HA via SMB | `./deploy-local.sh` |
+| Command | Purpose | Usage |
+|---------|---------|-------|
+| `bun dev` | Start mock server + dashboard dev | `bun dev` |
+| `bun run build` | Build dashboard for production | `bun run build` |
+| `bun run lint` | Run Biome linter | `bun run lint` |
+| `bun run lint:fix` | Auto-fix lint issues | `bun run lint:fix` |
+| `bun run typecheck` | Check TypeScript types | `bun run typecheck` |
+| `./scripts/build.sh` | Build dashboard (shell script) | `./scripts/build.sh` |
+| `./scripts/clean.sh` | Remove all build artifacts | `./scripts/clean.sh` |
+| `./scripts/deploy-local.sh` | Deploy to HA via SMB | `./scripts/deploy-local.sh` |
+| `./scripts/test-docker.sh` | Test Docker build locally | `./scripts/test-docker.sh` |
 
 ## 🔍 Debugging
 
-### Check Server Logs in HA
+### Check Logs in Development
 
 ```bash
-# In HA: Settings → Add-ons → Air-1 Quality Dashboard → Log
+# Mock server logs (stdout)
+# Shows in terminal where you ran `bun dev`
+
+# Dashboard logs (browser console)
+# Open DevTools → Console
+```
+
+### Check Logs in Home Assistant
+
+```bash
+# In HA UI:
+# Settings → Add-ons → Air-1 Quality Dashboard → Log
+
+# Or via CLI:
+docker logs addon_local_air1_dashboard
 ```
 
 ### Test API Endpoints
 
 ```bash
 # Health check
-curl http://homeassistant.local:8099/health
+curl http://localhost:8099/health
 
-# Get config
-curl http://homeassistant.local:8099/api/config
+# Config
+curl http://localhost:8099/api/config
 
-# List sensors (requires HA API token)
-curl http://homeassistant.local:8099/api/sensors
+# Sensors (mock data)
+curl http://localhost:8099/api/sensors
+
+# History
+curl http://localhost:8099/api/history/2c77c8?days=7
+
+# Storage
+curl http://localhost:8099/api/storage/readings
 ```
 
 ### Common Issues
 
+**`bun dev` fails**:
+- Ensure Bun >= 1.0.0: `bun --version`
+- Delete node_modules: `./scripts/clean.sh && bun install`
+- Check ports 8099 and 4321 are free
+
+**TypeScript errors**:
+- Run `bun run typecheck` to see all errors
+- Check `tsconfig.json` settings
+- Ensure dependencies are installed
+
 **Build fails in HA**:
 - Check addon logs for errors
-- Ensure multi-stage Dockerfile has all dependencies
-- Try rebuilding: Settings → Add-ons → Rebuild
-
-**Dev server can't find dist/**:
-- Run `./build.sh` first
-- Check that `dashboard/dist/` exists
+- Ensure Dockerfile has all dependencies
+- Try: Settings → Add-ons → Rebuild
+- Test locally: `./scripts/test-docker.sh`
 
 **SMB deploy fails**:
-- Mount the share: `open smb://homeassistant/addons`
-- Check `/Volumes/addons` exists
-- Verify network connection to HA
+- Mount share: `open smb://homeassistant/addons`
+- Check network connection to HA
+- Verify `/Volumes/addons` exists
+
+**Dashboard won't load**:
+- Check browser console for errors
+- Verify API base URL in `.env.development`
+- Ensure mock server is running (port 8099)
 
 ## 🚀 Release Workflow
 
-1. **Make changes** and test with `./dev-preview.sh`
-2. **Clean the repo**: `./clean.sh`
-3. **Commit changes**: `git add -A && git commit -m "description"`
-4. **Update version** in `config.yaml` and `CHANGELOG.md`
-5. **Tag release**: `git tag v1.0.1`
-6. **Push**: `git push && git push --tags`
-7. **Users pull updates** from GitHub
+1. **Make and test changes** locally with `bun dev`
+2. **Update version** in `package.json` and `config.yaml`
+3. **Update CHANGELOG.md** with changes
+4. **Run tests**:
+   ```bash
+   bun run lint
+   bun run typecheck
+   bun run build
+   ./scripts/test-docker.sh
+   ```
+5. **Clean the repo**: `./scripts/clean.sh`
+6. **Commit changes**:
+   ```bash
+   git add -A
+   git commit -m "feat: add new feature"
+   ```
+7. **Tag release**: `git tag v0.5.1`
+8. **Push**: `git push && git push --tags`
 
-## 📂 Project Structure
+## 🎯 Development Tips
 
+### Fast Iteration
+- Use `bun dev` for UI changes with hot reload
+- Mock server provides instant feedback
+- No need to rebuild for dashboard changes
+
+### Testing HA Integration
+- Use `./scripts/deploy-local.sh` to test in real HA
+- Keep addon logs open in HA UI
+- Check for API errors in server logs
+
+### Code Quality
+- Run `bun run lint:fix` before committing
+- Git hooks run automatically (Lefthook)
+- Pre-commit: Runs Biome formatter/linter
+- Commit-msg: Validates commit message format
+
+### Performance
+- Dashboard build is optimized by Astro
+- Mock server uses in-memory storage (fast)
+- Production uses SQLite (persistent)
+
+### Debugging TypeScript
+- Use VS Code with TypeScript extension
+- Enable "TypeScript: Check JS" in settings
+- Use `console.log()` in dev server
+- Browser DevTools for dashboard debugging
+
+## 🌐 Environment Variables
+
+### Dashboard (.env.development)
+```env
+PUBLIC_API_BASE_URL=http://localhost:8099
 ```
-air1-dashboard-ha-addon/
-├── config.yaml           # HA addon manifest
-├── Dockerfile            # Multi-stage build
-├── build.sh              # Build dashboard locally
-├── dev-preview.sh        # Dev server with mocks
-├── clean.sh              # Remove build artifacts
-├── deploy-local.sh       # Deploy to HA via SMB
-│
-├── server/               # Node.js backend
-│   ├── server.js         # Express API server
-│   ├── ha-client.js      # HA API integration
-│   ├── dev-server.js     # Mock server for dev
-│   └── config.js         # Entity mappings
-│
-├── dashboard/            # SolidJS frontend
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── HADataSource.tsx
-│   │   │   └── ...
-│   │   └── pages/
-│   └── dist/            # Built files (gitignored)
-│
-└── rootfs/
-    └── usr/bin/run.sh    # Addon startup script
+
+### Dashboard (.env.production)
+```env
+PUBLIC_API_BASE_URL=
+# Empty = relative paths (works with HA ingress)
 ```
 
-## 🎯 Quick Tips
+### Server (HA addon runtime)
+```bash
+SUPERVISOR_TOKEN=<auto-provided-by-ha>
+HA_API_BASE=http://supervisor/core/api
+PORT=8099
+CONFIG_PATH=/data/options.json
+STATIC_PATH=/app/dashboard/dist
+```
 
-- **Fast iteration**: Use `./dev-preview.sh` for UI changes
-- **Test HA integration**: Use `./deploy-local.sh` to test in real HA
-- **Before committing**: Run `./clean.sh` to keep repo clean
-- **Check Docker build**: Run `docker build .` locally before releasing
+## 📚 Additional Resources
+
+- **Bun Documentation**: https://bun.sh/docs
+- **Astro Documentation**: https://astro.build
+- **SolidJS Documentation**: https://www.solidjs.com
+- **Express Documentation**: https://expressjs.com
+- **Home Assistant Addon Development**: https://developers.home-assistant.io/docs/add-ons
 
 ## 🆘 Getting Help
 
-- **Issues**: Check addon logs in HA
-- **Questions**: See README.md for configuration options
-- **Bugs**: File an issue on GitHub
+- **Documentation**: Check README.md and CONTRIBUTING.md
+- **Issues**: Search existing GitHub issues
+- **Questions**: Open a GitHub discussion
+- **Bugs**: File an issue with details and logs
+
+---
+
+Happy coding! 🎉

@@ -4,9 +4,10 @@ set -e
 echo "🧹 Cleaning Air-1 Dashboard Addon..."
 echo ""
 
-# Get the script directory
+# Get the project root (one level up from scripts/)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT"
 
 # Colors
 RED='\033[0;31m'

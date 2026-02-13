@@ -4,9 +4,10 @@ set -e
 echo "🚀 Deploying Air-1 Dashboard to Home Assistant..."
 echo ""
 
-# Get the script directory
+# Get the project root (one level up from scripts/)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT"
 
 # Colors
 RED='\033[0;31m'
@@ -21,7 +22,7 @@ TARGET_PATH="$SMB_PATH/$ADDON_NAME"
 
 # Step 1: Clean build artifacts
 echo "Step 1: Cleaning build artifacts..."
-./clean.sh
+"$SCRIPT_DIR/clean.sh"
 echo ""
 
 # Step 2: Check if SMB share is mounted

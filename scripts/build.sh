@@ -12,8 +12,9 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Build directory
-BUILD_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Project root (one level up from scripts/)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$BUILD_DIR"
 
 echo "Build directory: $BUILD_DIR"

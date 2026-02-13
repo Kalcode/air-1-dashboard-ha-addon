@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Ensure we're in the project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$(dirname "$SCRIPT_DIR")"
+
 echo "🐳 Testing Air-1 Dashboard Docker Container Locally"
 echo ""
 
