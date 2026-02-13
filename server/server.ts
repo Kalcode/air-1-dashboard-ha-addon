@@ -325,7 +325,7 @@ function createApp(): Express {
   });
 
   // Mount storage API routes
-  app.use('/api/storage', storageRouter);
+  app.use('api/storage', storageRouter);
 
   // Serve static files from dashboard build directory
   // HA ingress proxy handles path forwarding, so we just serve files as-is

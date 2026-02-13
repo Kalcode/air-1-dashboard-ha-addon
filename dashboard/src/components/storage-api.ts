@@ -40,7 +40,7 @@ interface StatsResponse {
   database_path: string;
 }
 
-const API_BASE = '/api/storage';
+const API_BASE = 'api/storage';
 
 /**
  * Get readings with pagination and filtering
