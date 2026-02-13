@@ -1,19 +1,14 @@
 /**
  * Home Assistant API Client
  *
- * Handles all API interactions with Home Assistant Supervisor
+ * Handles all API interactions with Home Assistant Supervisor using native fetch
  */
 
-import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import { extractSensorType, getDeviceName, parseEntityId } from './config';
 import type { HAEntity, HAHistoryRecord, SensorData, SensorType, TimeSeriesDataPoint } from './types';
 
-/**
- * Type guard for Axios errors
- */
-function isAxiosError(error: unknown): error is AxiosError {
-  return axios.isAxiosError(error);
-}
+const HA_API_BASE = process.env.HA_API_BASE || 'http://supervisor/core/api';
+const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN;
 
 /**
  * Safely extract error message from unknown error type
@@ -23,18 +18,28 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-const HA_API_BASE = process.env.HA_API_BASE || 'http://supervisor/core/api';
-const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN;
+/**
+ * Helper function to make fetch requests to Home Assistant API
+ */
+async function haFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const url = `${HA_API_BASE}${path}`;
 
-// Create axios instance with default config
-const haClient: AxiosInstance = axios.create({
-  baseURL: HA_API_BASE,
-  headers: {
-    Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 second timeout
-});
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${SUPERVISOR_TOKEN}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    signal: AbortSignal.timeout(30000), // 30 second timeout
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return response.json() as T;
+}
 
 /**
  * Fetch all sensors matching the prefix
@@ -45,8 +50,7 @@ export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
   try {
     console.log(`[HA Client] Fetching sensors with prefix: ${prefix}`);
 
-    const response = await haClient.get<HAEntity[]>('/states');
-    const states = response.data;
+    const states = await haFetch<HAEntity[]>('/states');
 
     // Filter for sensors matching the prefix
     const pattern = new RegExp(`^sensor\\.${prefix}_`, 'i');
@@ -86,12 +90,6 @@ export async function fetchSensors(prefix = 'air1'): Promise<HAEntity[]> {
     return matchingSensors;
   } catch (error: unknown) {
     console.error('[HA Client] Error fetching sensors:', getErrorMessage(error));
-
-    if (isAxiosError(error) && error.response) {
-      console.error('[HA Client] Response status:', error.response.status);
-      console.error('[HA Client] Response data:', error.response.data);
-    }
-
     throw new Error(`Failed to fetch sensors: ${getErrorMessage(error)}`);
   }
 }
@@ -105,21 +103,19 @@ export async function fetchState(entityId: string): Promise<HAEntity> {
   try {
     console.log(`[HA Client] Fetching state for entity: ${entityId}`);
 
-    const response = await haClient.get<HAEntity>(`/states/${entityId}`);
+    const entity = await haFetch<HAEntity>(`/states/${entityId}`);
 
-    return response.data;
+    return entity;
   } catch (error: unknown) {
-    console.error(`[HA Client] Error fetching state for ${entityId}:`, getErrorMessage(error));
+    const errorMessage = getErrorMessage(error);
+    console.error(`[HA Client] Error fetching state for ${entityId}:`, errorMessage);
 
-    if (isAxiosError(error) && error.response) {
-      if (error.response.status === 404) {
-        throw new Error(`Entity not found: ${entityId}`);
-      }
-      console.error('[HA Client] Response status:', error.response.status);
-      console.error('[HA Client] Response data:', error.response.data);
+    // Check if it's a 404 error
+    if (errorMessage.includes('404')) {
+      throw new Error(`Entity not found: ${entityId}`);
     }
 
-    throw new Error(`Failed to fetch state: ${getErrorMessage(error)}`);
+    throw new Error(`Failed to fetch state: ${errorMessage}`);
   }
 }
 
@@ -128,51 +124,30 @@ export async function fetchState(entityId: string): Promise<HAEntity> {
  * @param entityId - Entity ID
  * @param start - ISO timestamp for start (optional)
  * @param end - ISO timestamp for end (optional)
- * @returns Array of historical state changes
+ * @returns Array of historical state records
  */
-export async function fetchHistory(
-  entityId: string,
-  start: string | null = null,
-  end: string | null = null,
-): Promise<HAHistoryRecord[]> {
+export async function fetchHistory(entityId: string, start?: string, end?: string): Promise<HAHistoryRecord[]> {
   try {
-    // If no start time provided, default to 24 hours ago
-    const startTime = start || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const endTime = end || new Date().toISOString();
+    console.log(`[HA Client] Fetching history for entity: ${entityId}`);
 
-    console.log(`[HA Client] Fetching history for ${entityId} from ${startTime} to ${endTime}`);
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (start) params.set('start_time', start);
+    if (end) params.set('end_time', end);
 
-    // HA history API endpoint format: /history/period/{start_time}?filter_entity_id={entity_id}&end_time={end_time}
-    const params = new URLSearchParams({
-      filter_entity_id: entityId,
-      end_time: endTime,
-    });
+    const query = params.toString();
+    const path = `/history/period${query ? `?${query}` : ''}`;
 
-    const url = `/history/period/${startTime}?${params.toString()}`;
-    const response = await haClient.get<HAHistoryRecord[][]>(url);
+    const history = await haFetch<HAHistoryRecord[][]>(path);
 
-    // History API returns array of arrays (one array per entity)
-    const historyData = response.data;
-
-    if (!historyData || historyData.length === 0) {
-      console.log(`[HA Client] No history data found for ${entityId}`);
-      return [];
-    }
-
-    // Get the first (and should be only) entity's history
-    const entityHistory = historyData[0] || [];
+    // HA returns nested array: [[entity_history]]
+    const entityHistory = history[0] || [];
 
     console.log(`[HA Client] Retrieved ${entityHistory.length} history records`);
 
     return entityHistory;
   } catch (error: unknown) {
     console.error(`[HA Client] Error fetching history for ${entityId}:`, getErrorMessage(error));
-
-    if (isAxiosError(error) && error.response) {
-      console.error('[HA Client] Response status:', error.response.status);
-      console.error('[HA Client] Response data:', error.response.data);
-    }
-
     throw new Error(`Failed to fetch history: ${getErrorMessage(error)}`);
   }
 }
@@ -183,101 +158,100 @@ export async function fetchHistory(
  * @param prefix - Sensor prefix
  * @returns Transformed sensor data
  */
-function transformEntity(entity: HAEntity, prefix = 'air1'): SensorData {
-  const { device, sensor } = parseEntityId(entity.entity_id, prefix);
-  const sensorType = extractSensorType(entity.entity_id, entity.attributes, prefix);
-
-  // Parse state value
-  let value: number | null = null;
-  let unit = entity.attributes?.unit_of_measurement || null;
-  if (entity.state && entity.state !== 'unknown' && entity.state !== 'unavailable') {
-    const parsed = Number.parseFloat(entity.state);
-    if (!Number.isNaN(parsed)) {
-      value = parsed;
-    }
-  }
-
-  // CRITICAL: Convert Fahrenheit to Celsius for temperature sensors
-  // This is the primary temperature conversion logic that must be preserved exactly
-  if (sensorType === 'temperature' && value !== null && unit === '°F') {
-    const beforeConvert = value;
-    value = Math.round((((value - 32) * 5) / 9) * 100) / 100;
-    unit = '°C';
-    console.log(`[HA Client] Converted temperature from °F to °C: ${beforeConvert}°F → ${value}°C`);
-  }
-
-  // CRITICAL: Apply calibration offset after unit conversion (offset is in °C)
-  // Example: 75.5°F → 24.17°C, then + 2°C offset = 26.17°C
-  if (value !== null && entity._offset != null) {
-    const before = value;
-    value = Math.round((value + entity._offset) * 100) / 100;
-    console.log(
-      `[HA Client] Applied offset ${entity._offset}°C to ${entity.entity_id}: ${before}°C → ${value}°C (from ${entity._offset_entity})`,
-    );
-  }
-
-  return {
-    entity_id: entity.entity_id,
-    device: device,
-    device_name: getDeviceName(device),
-    sensor: sensor,
-    sensor_type: sensorType,
-    value: value,
-    unit: unit,
-    state: entity.state,
-    friendly_name: entity.attributes?.friendly_name || entity.entity_id,
-    device_class: entity.attributes?.device_class || null,
-    last_updated: entity.last_updated,
-    last_changed: entity.last_changed,
-    attributes: entity.attributes || {},
-  };
-}
-
-/**
- * Transform array of HA entities to SensorData format
- * @param entities - Array of HA entity objects
- * @param prefix - Sensor prefix
- * @returns Array of transformed sensor data
- */
 export function transformEntityToSensorData(entities: HAEntity[], prefix = 'air1'): SensorData[] {
-  if (!Array.isArray(entities)) {
-    console.error('[HA Client] transformEntityToSensorData received non-array input');
-    return [];
-  }
+  return entities.map((entity) => {
+    const { device, sensor } = parseEntityId(entity.entity_id, prefix);
+    const sensorType = extractSensorType(entity.entity_id, entity.attributes, prefix);
 
-  return entities.map((entity) => transformEntity(entity, prefix));
+    // Parse numeric value from state
+    let value: number | null = null;
+    const numericValue = Number.parseFloat(entity.state);
+    if (!Number.isNaN(numericValue)) {
+      value = numericValue;
+    }
+
+    // Get unit and device class
+    let unit: string | null = null;
+    if (entity.attributes.unit_of_measurement && typeof entity.attributes.unit_of_measurement === 'string') {
+      unit = entity.attributes.unit_of_measurement;
+    }
+
+    let deviceClass: string | null = null;
+    if (entity.attributes.device_class && typeof entity.attributes.device_class === 'string') {
+      deviceClass = entity.attributes.device_class;
+    }
+
+    // CRITICAL: Temperature conversion logic
+    // F to C conversion BEFORE applying offset
+    if (sensorType === 'temperature' && value !== null && unit === '°F') {
+      value = Math.round((((value - 32) * 5) / 9) * 100) / 100;
+      unit = '°C';
+    }
+
+    // Apply calibration offset AFTER unit conversion
+    if (value !== null && entity._offset != null) {
+      value = Math.round((value + entity._offset) * 100) / 100;
+    }
+
+    let friendlyName = 'Unknown';
+    if (entity.attributes.friendly_name && typeof entity.attributes.friendly_name === 'string') {
+      friendlyName = entity.attributes.friendly_name;
+    }
+
+    return {
+      entity_id: entity.entity_id,
+      device,
+      device_name: getDeviceName(device),
+      sensor,
+      sensor_type: sensorType,
+      value,
+      unit,
+      state: entity.state,
+      friendly_name: friendlyName,
+      device_class: deviceClass,
+      last_updated: entity.last_updated,
+      last_changed: entity.last_changed,
+      attributes: entity.attributes,
+    };
+  });
 }
 
 /**
  * Transform historical data to time-series format
- * @param historyData - Array of history records from HA
- * @returns Array of { timestamp, value } objects
+ * @param history - Array of historical state records
+ * @param prefix - Sensor prefix
+ * @returns Transformed time-series data
  */
-export function transformHistoryData(historyData: HAHistoryRecord[]): TimeSeriesDataPoint[] {
-  if (!Array.isArray(historyData)) {
-    console.error('[HA Client] transformHistoryData received non-array input');
-    return [];
-  }
+export function transformHistoryData(history: HAHistoryRecord[], prefix = 'air1'): TimeSeriesDataPoint[] {
+  return history.map((record) => {
+    const sensorType = extractSensorType(record.entity_id, record.attributes, prefix);
 
-  return historyData
-    .map((record) => {
-      // Parse state value
-      let value: number | null = null;
-      if (record.state && record.state !== 'unknown' && record.state !== 'unavailable') {
-        const parsed = Number.parseFloat(record.state);
-        if (!Number.isNaN(parsed)) {
-          value = parsed;
-        }
-      }
+    // Parse numeric value from state
+    let value: number | null = null;
+    const numericValue = Number.parseFloat(record.state);
+    if (!Number.isNaN(numericValue)) {
+      value = numericValue;
+    }
 
-      return {
-        timestamp: record.last_updated,
-        value: value,
-        state: record.state,
-        attributes: record.attributes || {},
-      };
-    })
-    .filter((record) => record.value !== null); // Filter out invalid records
+    // Get unit
+    let unit: string | null = null;
+    if (record.attributes.unit_of_measurement && typeof record.attributes.unit_of_measurement === 'string') {
+      unit = record.attributes.unit_of_measurement;
+    }
+
+    // Temperature conversion (same as above)
+    if (sensorType === 'temperature' && value !== null && unit === '°F') {
+      value = Math.round((((value - 32) * 5) / 9) * 100) / 100;
+      unit = '°C';
+    }
+
+    return {
+      timestamp: record.last_updated,
+      value,
+      state: record.state,
+      attributes: record.attributes,
+    };
+  });
 }
 
 /**
@@ -288,9 +262,9 @@ export async function testConnection(): Promise<boolean> {
   try {
     console.log('[HA Client] Testing connection to Home Assistant API');
 
-    const response = await haClient.get<{ message?: string }>('/');
+    await haFetch<{ message?: string }>('/');
 
-    console.log('[HA Client] Connection successful:', response.data?.message);
+    console.log('[HA Client] Connection successful');
     return true;
   } catch (error: unknown) {
     console.error('[HA Client] Connection test failed:', getErrorMessage(error));
@@ -306,9 +280,9 @@ export async function fetchConfig(): Promise<unknown> {
   try {
     console.log('[HA Client] Fetching Home Assistant configuration');
 
-    const response = await haClient.get('/config');
+    const config = await haFetch<unknown>('/config');
 
-    return response.data;
+    return config;
   } catch (error: unknown) {
     console.error('[HA Client] Error fetching config:', getErrorMessage(error));
     throw new Error(`Failed to fetch HA config: ${getErrorMessage(error)}`);
